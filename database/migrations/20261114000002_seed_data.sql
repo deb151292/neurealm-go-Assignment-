@@ -27,10 +27,10 @@ ON CONFLICT (code) DO NOTHING;
 -- 3. Initial Users (All default passwords: "Password123!")
 -- Bcrypt hash generated with cost 10 for Password123!
 INSERT INTO users (id, email, password_hash, first_name, last_name, is_platform_admin) VALUES
-    ('10000000-0000-0000-0000-000000000001', 'admin@platform.com', '$2a$10$iZg7t13h7b9xQxW5Zg/7g.pY5P1m9UoKjJ0X9rU5cZ7F5vU5g7K7e', 'Platform', 'Admin', TRUE),
-    ('10000000-0000-0000-0000-000000000002', 'alice@multitenant.com', '$2a$10$iZg7t13h7b9xQxW5Zg/7g.pY5P1m9UoKjJ0X9rU5cZ7F5vU5g7K7e', 'Alice', 'Multi', FALSE),
-    ('10000000-0000-0000-0000-000000000003', 'bob@acme.com', '$2a$10$iZg7t13h7b9xQxW5Zg/7g.pY5P1m9UoKjJ0X9rU5cZ7F5vU5g7K7e', 'Bob', 'Acme', FALSE),
-    ('10000000-0000-0000-0000-000000000004', 'charlie@globex.com', '$2a$10$iZg7t13h7b9xQxW5Zg/7g.pY5P1m9UoKjJ0X9rU5cZ7F5vU5g7K7e', 'Charlie', 'Globex', FALSE)
+    ('10000000-0000-0000-0000-000000000001', 'admin@platform.com', '$2a$10$P.VrlzHpYisA6Bg76AU.hOCBiNdSGXYg1IE9xmflNEMjJ/P0qBHaO', 'Platform', 'Admin', TRUE),
+    ('10000000-0000-0000-0000-000000000002', 'alice@multitenant.com', '$2a$10$P.VrlzHpYisA6Bg76AU.hOCBiNdSGXYg1IE9xmflNEMjJ/P0qBHaO', 'Alice', 'Multi', FALSE),
+    ('10000000-0000-0000-0000-000000000003', 'bob@acme.com', '$2a$10$P.VrlzHpYisA6Bg76AU.hOCBiNdSGXYg1IE9xmflNEMjJ/P0qBHaO', 'Bob', 'Acme', FALSE),
+    ('10000000-0000-0000-0000-000000000004', 'charlie@globex.com', '$2a$10$P.VrlzHpYisA6Bg76AU.hOCBiNdSGXYg1IE9xmflNEMjJ/P0qBHaO', 'Charlie', 'Globex', FALSE)
 ON CONFLICT (email) DO NOTHING;
 
 -- 4. Tenant Users (Alice belongs to both Acme and Globex!)
