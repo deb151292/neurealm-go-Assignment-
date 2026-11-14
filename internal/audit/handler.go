@@ -1,11 +1,11 @@
 package audit
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
@@ -16,16 +16,16 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) ListAuditLogs(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	search := r.URL.Query().Get("search")
+	page, _ := strconv.Atoi(c.Query("page"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	search := c.Query("search")
 
 	params := domain.PaginationParams{
 		Page:   page,
@@ -33,11 +33,11 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		Search: search,
 	}
 
-	logs, total, err := h.service.ListByTenant(r.Context(), tenantID, params)
+	logs, total, err := h.service.ListByTenant(c.Request.Context(), tenantID, params)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Paginated(w, params.Page, params.Limit, total, logs)
+	response.Paginated(c, params.Page, params.Limit, total, logs)
 }

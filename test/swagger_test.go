@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"github.com/deb151292/neurealm-go-Assignment-/docs"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 )
 
 func TestSwagger_Endpoints(t *testing.T) {
-	r := chi.NewRouter()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
 	docs.RegisterSwaggerRoutes(r)
 
 	// 1. Test /swagger/doc.json

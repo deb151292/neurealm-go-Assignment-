@@ -1,11 +1,11 @@
 package response
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 )
 
@@ -39,26 +39,24 @@ type ErrorResponse struct {
 	Error   ErrorDetail `json:"error"`
 }
 
-func JSON(w http.ResponseWriter, status int, payload interface{}) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+func JSON(c *gin.Context, status int, payload interface{}) {
+	c.JSON(status, payload)
 }
 
-func Success(w http.ResponseWriter, status int, message string, data interface{}) {
-	JSON(w, status, APIResponse{
+func Success(c *gin.Context, status int, message string, data interface{}) {
+	c.JSON(status, APIResponse{
 		Success: true,
 		Message: message,
 		Data:    data,
 	})
 }
 
-func Paginated(w http.ResponseWriter, page, limit int, total int64, data interface{}) {
+func Paginated(c *gin.Context, page, limit int, total int64, data interface{}) {
 	totalPages := 0
 	if limit > 0 {
 		totalPages = int(math.Ceil(float64(total) / float64(limit)))
 	}
-	JSON(w, http.StatusOK, PaginatedResponse{
+	c.JSON(http.StatusOK, PaginatedResponse{
 		Success: true,
 		Data:    data,
 		Pagination: PaginationMeta{
@@ -70,8 +68,8 @@ func Paginated(w http.ResponseWriter, page, limit int, total int64, data interfa
 	})
 }
 
-func Error(w http.ResponseWriter, status int, code, message string, details map[string]interface{}) {
-	JSON(w, status, ErrorResponse{
+func Error(c *gin.Context, status int, code, message string, details map[string]interface{}) {
+	c.JSON(status, ErrorResponse{
 		Success: false,
 		Error: ErrorDetail{
 			Code:    code,
@@ -81,32 +79,32 @@ func Error(w http.ResponseWriter, status int, code, message string, details map[
 	})
 }
 
-// FromError converts a Go error or domain.AppError into a standardized HTTP response
-func FromError(w http.ResponseWriter, err error) {
+// FromError converts a Go error or domain.AppError into a standardized Gin HTTP response
+func FromError(c *gin.Context, err error) {
 	if err == nil {
 		return
 	}
 
 	var appErr *domain.AppError
 	if errors.As(err, &appErr) {
-		Error(w, appErr.Status, appErr.Code, appErr.Message, appErr.Details)
+		Error(c, appErr.Status, appErr.Code, appErr.Message, appErr.Details)
 		return
 	}
 
 	switch {
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrCrossTenantAccess):
-		Error(w, http.StatusNotFound, "NOT_FOUND", "resource not found", nil)
+		Error(c, http.StatusNotFound, "NOT_FOUND", "resource not found", nil)
 	case errors.Is(err, domain.ErrUnauthorized), errors.Is(err, domain.ErrInvalidToken):
-		Error(w, http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), nil)
+		Error(c, http.StatusUnauthorized, "UNAUTHORIZED", err.Error(), nil)
 	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrTenantSuspended), errors.Is(err, domain.ErrUserSuspended):
-		Error(w, http.StatusForbidden, "FORBIDDEN", err.Error(), nil)
+		Error(c, http.StatusForbidden, "FORBIDDEN", err.Error(), nil)
 	case errors.Is(err, domain.ErrConflict):
-		Error(w, http.StatusConflict, "CONFLICT", err.Error(), nil)
+		Error(c, http.StatusConflict, "CONFLICT", err.Error(), nil)
 	case errors.Is(err, domain.ErrBadRequest), errors.Is(err, domain.ErrCannotDeleteAdmin):
-		Error(w, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		Error(c, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 	case errors.Is(err, domain.ErrValidation):
-		Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error(), nil)
+		Error(c, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error(), nil)
 	default:
-		Error(w, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "an unexpected error occurred", nil)
+		Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "an unexpected error occurred", nil)
 	}
 }

@@ -3,24 +3,24 @@ package middleware
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
 
 // EnforceTenantIsolation ensures that tenant context is strictly derived from the verified token
-func EnforceTenantIsolation() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tenantID, ok := domain.GetTenantID(r.Context())
-			if !ok || tenantID.String() == "" {
-				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "tenant context missing in token", nil)
-				return
-			}
+func EnforceTenantIsolation() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantID, ok := domain.GetTenantID(c.Request.Context())
+		if !ok || tenantID.String() == "" {
+			response.Error(c, http.StatusUnauthorized, "UNAUTHORIZED", "tenant context missing in token", nil)
+			c.Abort()
+			return
+		}
 
-			// Add strict tenant-isolation headers to response
-			w.Header().Set("X-Tenant-Scope", tenantID.String())
+		// Add strict tenant-isolation headers to response
+		c.Header("X-Tenant-Scope", tenantID.String())
 
-			next.ServeHTTP(w, r)
-		})
+		c.Next()
 	}
 }

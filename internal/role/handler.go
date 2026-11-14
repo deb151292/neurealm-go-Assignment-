@@ -1,14 +1,13 @@
 package role
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -19,60 +18,60 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) CreateRole(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) CreateRole(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
 	var req CreateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	role, err := h.service.CreateRole(r.Context(), tenantID, req)
+	role, err := h.service.CreateRole(c.Request.Context(), tenantID, req)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusCreated, "role created successfully", role)
+	response.Success(c, http.StatusCreated, "role created successfully", role)
 }
 
-func (h *Handler) GetRole(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) GetRole(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	roleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	roleID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
+		response.Error(c, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
 		return
 	}
 
-	role, err := h.service.GetRole(r.Context(), tenantID, roleID)
+	role, err := h.service.GetRole(c.Request.Context(), tenantID, roleID)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "role retrieved successfully", role)
+	response.Success(c, http.StatusOK, "role retrieved successfully", role)
 }
 
-func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) ListRoles(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	search := r.URL.Query().Get("search")
+	page, _ := strconv.Atoi(c.Query("page"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	search := c.Query("search")
 
 	params := domain.PaginationParams{
 		Page:   page,
@@ -80,87 +79,87 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		Search: search,
 	}
 
-	roles, total, err := h.service.ListRoles(r.Context(), tenantID, params)
+	roles, total, err := h.service.ListRoles(c.Request.Context(), tenantID, params)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Paginated(w, params.Page, params.Limit, total, roles)
+	response.Paginated(c, params.Page, params.Limit, total, roles)
 }
 
-func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) UpdateRole(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	roleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	roleID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
+		response.Error(c, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
 		return
 	}
 
 	var req UpdateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	role, err := h.service.UpdateRole(r.Context(), tenantID, roleID, req)
+	role, err := h.service.UpdateRole(c.Request.Context(), tenantID, roleID, req)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "role updated successfully", role)
+	response.Success(c, http.StatusOK, "role updated successfully", role)
 }
 
-func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) DeleteRole(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	roleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	roleID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
+		response.Error(c, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
 		return
 	}
 
-	if err := h.service.DeleteRole(r.Context(), tenantID, roleID); err != nil {
-		response.FromError(w, err)
+	if err := h.service.DeleteRole(c.Request.Context(), tenantID, roleID); err != nil {
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "role deleted successfully", nil)
+	response.Success(c, http.StatusOK, "role deleted successfully", nil)
 }
 
-func (h *Handler) AssignPermissions(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := domain.GetTenantID(r.Context())
+func (h *Handler) AssignPermissions(c *gin.Context) {
+	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	roleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	roleID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
+		response.Error(c, http.StatusBadRequest, "INVALID_ID", "invalid role uuid format", nil)
 		return
 	}
 
 	var req AssignPermissionsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	if err := h.service.AssignPermissions(r.Context(), tenantID, roleID, req.PermissionIDs); err != nil {
-		response.FromError(w, err)
+	if err := h.service.AssignPermissions(c.Request.Context(), tenantID, roleID, req.PermissionIDs); err != nil {
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "permissions assigned to role successfully", nil)
+	response.Success(c, http.StatusOK, "permissions assigned to role successfully", nil)
 }

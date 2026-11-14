@@ -12,7 +12,7 @@ The **Multi-Tenant User Management System** provides high-throughput authenticat
                                                 ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Handler Layer (HTTP Presentation)                                                         │
-│   ├── Router (Chi Radix Tree Router)                                                       │
+│   ├── Router (Gin HTTP Engine)                                                             │
 │   ├── Middlewares: Auth (JWT), EnforceTenantIsolation, RBAC (401 vs 403), RequestLogger   │
 │   └── Handlers: AuthHandler, TenantHandler, UserHandler, RoleHandler, AuditHandler         │
 └───────────────────────────────────────────────┬────────────────────────────────────────────┘

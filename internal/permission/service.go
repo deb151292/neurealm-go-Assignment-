@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
@@ -28,12 +29,12 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
-	perms, err := h.service.ListPermissions(r.Context())
+func (h *Handler) ListPermissions(c *gin.Context) {
+	perms, err := h.service.ListPermissions(c.Request.Context())
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "permissions retrieved successfully", perms)
+	response.Success(c, http.StatusOK, "permissions retrieved successfully", perms)
 }

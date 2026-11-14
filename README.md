@@ -47,7 +47,7 @@ The codebase follows the Clean Architecture pattern (`Handler -> Service -> Repo
 │   ├── role/                     # Tenant-specific roles and permission assignments
 │   ├── permission/               # System permission catalog
 │   ├── audit/                    # Tenant-scoped security audit trail
-│   └── server/                   # Chi router setup and route bindings
+│   └── server/                   # Gin engine setup and route bindings
 ├── test/
 │   ├── mock_store.go             # Mock repository store for testing
 │   └── cross_tenant_test.go      # End-to-end integration & cross-tenant 404 tests

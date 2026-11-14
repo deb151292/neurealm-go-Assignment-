@@ -19,14 +19,18 @@ import (
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
 type TestEnv struct {
 	Store      *MockStore
-	Router     http.Handler
+	Router     *gin.Engine
 	JWTService *auth.JWTService
 	Cache      *cache.PermissionCache
 
@@ -60,53 +64,59 @@ func setupTestEnv(t *testing.T) *TestEnv {
 	auditH := audit.NewHandler(auditSvc)
 	authH := auth.NewHandler(authSvc, userSvc, store.TenantRepo(), roleSvc)
 
-	r := chi.NewRouter()
-	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Post("/auth/login", authH.Login)
-		v1.Post("/auth/refresh", authH.Refresh)
+	r := gin.New()
+	v1 := r.Group("/api/v1")
+	{
+		v1.POST("/auth/login", authH.Login)
+		v1.POST("/auth/refresh", authH.Refresh)
 
-		v1.Group(func(prot chi.Router) {
-			prot.Use(middleware.Auth(jwtSvc))
-			prot.Use(middleware.EnforceTenantIsolation())
+		prot := v1.Group("")
+		prot.Use(middleware.Auth(jwtSvc))
+		prot.Use(middleware.EnforceTenantIsolation())
+		{
+			prot.GET("/auth/me", authH.Me)
+			prot.POST("/auth/switch-tenant", authH.SwitchTenant)
+			prot.POST("/auth/logout", authH.Logout)
 
-			prot.Get("/auth/me", authH.Me)
-			prot.Post("/auth/switch-tenant", authH.SwitchTenant)
-			prot.Post("/auth/logout", authH.Logout)
+			tenants := prot.Group("/tenants")
+			{
+				tenants.POST("", tenantH.CreateTenant)
+				tenants.GET("", tenantH.ListTenants)
+				tenants.GET("/:id", middleware.RequirePermission(roleSvc, domain.PermTenantRead), tenantH.GetTenant)
+				tenants.PUT("/:id", middleware.RequirePermission(roleSvc, domain.PermTenantUpdate), tenantH.UpdateTenant)
+			}
 
-			prot.Route("/tenants", func(tr chi.Router) {
-				tr.Post("/", tenantH.CreateTenant)
-				tr.Get("/", tenantH.ListTenants)
-				tr.With(middleware.RequirePermission(roleSvc, domain.PermTenantRead)).Get("/{id}", tenantH.GetTenant)
-				tr.With(middleware.RequirePermission(roleSvc, domain.PermTenantUpdate)).Put("/{id}", tenantH.UpdateTenant)
-			})
+			users := prot.Group("/users")
+			{
+				users.POST("", middleware.RequirePermission(roleSvc, domain.PermUserCreate), userH.CreateUser)
+				users.GET("", middleware.RequirePermission(roleSvc, domain.PermUserRead), userH.ListUsers)
+				users.GET("/:id", middleware.RequirePermission(roleSvc, domain.PermUserRead), userH.GetUser)
+				users.PUT("/:id", middleware.RequirePermission(roleSvc, domain.PermUserUpdate), userH.UpdateUser)
+				users.DELETE("/:id", middleware.RequirePermission(roleSvc, domain.PermUserDelete), userH.DeleteUser)
+				users.POST("/:id/roles", middleware.RequirePermission(roleSvc, domain.PermRoleAssign), userH.AssignRoles)
+			}
 
-			prot.Route("/users", func(ur chi.Router) {
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermUserCreate)).Post("/", userH.CreateUser)
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermUserRead)).Get("/", userH.ListUsers)
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermUserRead)).Get("/{id}", userH.GetUser)
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermUserUpdate)).Put("/{id}", userH.UpdateUser)
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermUserDelete)).Delete("/{id}", userH.DeleteUser)
-				ur.With(middleware.RequirePermission(roleSvc, domain.PermRoleAssign)).Post("/{id}/roles", userH.AssignRoles)
-			})
+			roles := prot.Group("/roles")
+			{
+				roles.POST("", middleware.RequirePermission(roleSvc, domain.PermRoleCreate), roleH.CreateRole)
+				roles.GET("", middleware.RequirePermission(roleSvc, domain.PermRoleRead), roleH.ListRoles)
+				roles.GET("/:id", middleware.RequirePermission(roleSvc, domain.PermRoleRead), roleH.GetRole)
+				roles.PUT("/:id", middleware.RequirePermission(roleSvc, domain.PermRoleUpdate), roleH.UpdateRole)
+				roles.DELETE("/:id", middleware.RequirePermission(roleSvc, domain.PermRoleDelete), roleH.DeleteRole)
+				roles.POST("/:id/permissions", middleware.RequirePermission(roleSvc, domain.PermRoleUpdate), roleH.AssignPermissions)
+			}
 
-			prot.Route("/roles", func(rr chi.Router) {
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleCreate)).Post("/", roleH.CreateRole)
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleRead)).Get("/", roleH.ListRoles)
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleRead)).Get("/{id}", roleH.GetRole)
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleUpdate)).Put("/{id}", roleH.UpdateRole)
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleDelete)).Delete("/{id}", roleH.DeleteRole)
-				rr.With(middleware.RequirePermission(roleSvc, domain.PermRoleUpdate)).Post("/{id}/permissions", roleH.AssignPermissions)
-			})
+			permissions := prot.Group("/permissions")
+			{
+				permissions.GET("", middleware.RequirePermission(roleSvc, domain.PermRoleRead), permH.ListPermissions)
+			}
 
-			prot.Route("/permissions", func(pr chi.Router) {
-				pr.With(middleware.RequirePermission(roleSvc, domain.PermRoleRead)).Get("/", permH.ListPermissions)
-			})
-
-			prot.Route("/audit-logs", func(ar chi.Router) {
-				ar.With(middleware.RequirePermission(roleSvc, domain.PermAuditRead)).Get("/", auditH.ListAuditLogs)
-			})
-		})
-	})
+			auditLogs := prot.Group("/audit-logs")
+			{
+				auditLogs.GET("", middleware.RequirePermission(roleSvc, domain.PermAuditRead), auditH.ListAuditLogs)
+			}
+		}
+	}
 
 	ctx := context.Background()
 
@@ -222,11 +232,9 @@ func TestCrossTenant_DeleteUser_Returns404(t *testing.T) {
 func TestCrossTenant_GetRole_Returns404(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// Create a custom role in Tenant A
 	roleA := &domain.Role{ID: uuid.New(), TenantID: env.TenantA.ID, Name: "AcmeCustomRole"}
 	_ = env.Store.CreateRole(context.Background(), roleA)
 
-	// Tenant B attempts to read Role A
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/roles/%s", roleA.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	rec := httptest.NewRecorder()
@@ -277,7 +285,6 @@ func TestCrossTenant_DeleteRole_Returns404(t *testing.T) {
 func TestCrossTenant_GetTenantDirect_Returns404(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// Tenant B token querying Tenant A's ID
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/tenants/%s", env.TenantA.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	rec := httptest.NewRecorder()
@@ -292,7 +299,6 @@ func TestCrossTenant_GetTenantDirect_Returns404(t *testing.T) {
 func TestCrossTenant_AuditLogsIsolation(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// Log event for Tenant A and Tenant B
 	_ = env.Store.CreateAudit(context.Background(), &domain.AuditLog{
 		TenantID:   &env.TenantA.ID,
 		Action:     "user:secret_acme_action",
@@ -307,7 +313,6 @@ func TestCrossTenant_AuditLogsIsolation(t *testing.T) {
 		TargetID:   env.UserBInTenantB.ID.String(),
 	})
 
-	// Tenant B requests audit logs
 	req := httptest.NewRequest("GET", "/api/v1/audit-logs", nil)
 	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	rec := httptest.NewRecorder()
@@ -345,11 +350,9 @@ func TestAuth_401Unauthorized_NoToken(t *testing.T) {
 func TestAuth_403Forbidden_MissingPermission(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// Create role in Tenant A with ONLY user:read permission
 	readOnlyRole := &domain.Role{ID: uuid.New(), TenantID: env.TenantA.ID, Name: "Viewer"}
 	_ = env.Store.CreateRole(context.Background(), readOnlyRole)
 
-	// Find user:read permission ID
 	var readPermID uuid.UUID
 	for id, p := range env.Store.Permissions {
 		if p.Resource == "user" && p.Action == "read" {
@@ -359,13 +362,11 @@ func TestAuth_403Forbidden_MissingPermission(t *testing.T) {
 	}
 	_ = env.Store.AssignPermissions(context.Background(), env.TenantA.ID, readOnlyRole.ID, []uuid.UUID{readPermID})
 
-	// Create user with Viewer role only
 	viewerUser := &domain.User{Email: "viewer@acme.com", FirstName: "View", LastName: "Only"}
 	_ = env.Store.CreateUserInTenant(context.Background(), env.TenantA.ID, viewerUser, []uuid.UUID{readOnlyRole.ID})
 
 	viewerToken, _ := env.JWTService.GenerateAccessToken(viewerUser, env.TenantA, []string{"Viewer"}, []string{"user:read"})
 
-	// Attempt to create user (requires "user:create")
 	payload := `{"email": "newbie@acme.com", "password": "Password123!", "first_name": "New", "last_name": "Bie"}`
 	req := httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(payload))
 	req.Header.Set("Authorization", "Bearer "+viewerToken)
@@ -374,7 +375,6 @@ func TestAuth_403Forbidden_MissingPermission(t *testing.T) {
 
 	env.Router.ServeHTTP(rec, req)
 
-	// Must return 403 Forbidden!
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden when user lacks permission, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -385,7 +385,6 @@ func TestAuth_403Forbidden_MissingPermission(t *testing.T) {
 func TestUser_SoftDelete_ExcludesFromQuery(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// 1. Delete user in Tenant A
 	reqDel := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%s", env.UserAInTenantA.ID), nil)
 	reqDel.Header.Set("Authorization", "Bearer "+env.TokenA)
 	recDel := httptest.NewRecorder()
@@ -395,7 +394,6 @@ func TestUser_SoftDelete_ExcludesFromQuery(t *testing.T) {
 		t.Fatalf("expected 200 OK for soft delete, got %d", recDel.Code)
 	}
 
-	// 2. Subsequent GET on soft-deleted user returns 404
 	reqGet := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s", env.UserAInTenantA.ID), nil)
 	reqGet.Header.Set("Authorization", "Bearer "+env.TokenA)
 	recGet := httptest.NewRecorder()
@@ -409,7 +407,6 @@ func TestUser_SoftDelete_ExcludesFromQuery(t *testing.T) {
 func TestMultiTenant_LoginAndSwitchTenant(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// 1. Alice logs in specifying "acme-corp"
 	loginReq := auth.LoginRequest{
 		Email:      "alice@multi.com",
 		Password:   "Password123!",
@@ -430,7 +427,6 @@ func TestMultiTenant_LoginAndSwitchTenant(t *testing.T) {
 	data := res["data"].(map[string]interface{})
 	tokenA := data["access_token"].(string)
 
-	// 2. Alice switches tenant to "globex"
 	switchReq := auth.SwitchTenantRequest{TenantCode: "globex"}
 	switchBody, _ := json.Marshal(switchReq)
 	reqSwitch := httptest.NewRequest("POST", "/api/v1/auth/switch-tenant", bytes.NewReader(switchBody))

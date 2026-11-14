@@ -17,16 +17,14 @@ import (
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
 	cfg        *config.Config
 	pool       *pgxpool.Pool
-	router     *chi.Mux
+	engine     *gin.Engine
 	cache      *cache.PermissionCache
 	jwtService *auth.JWTService
 
@@ -44,6 +42,10 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
+	if cfg.Env == "production" || cfg.Env == "test" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// 1. Core Services & Cache
 	permCache := cache.NewPermissionCache(cfg.CacheTTL, cfg.CacheCleanupPeriod)
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
@@ -72,10 +74,12 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	permH := permission.NewHandler(permSvc)
 	auditH := audit.NewHandler(auditSvc)
 
+	engine := gin.New()
+
 	s := &Server{
 		cfg:               cfg,
 		pool:              pool,
-		router:            chi.NewRouter(),
+		engine:            engine,
 		cache:             permCache,
 		jwtService:        jwtSvc,
 		authHandler:       authH,
@@ -92,8 +96,12 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	return s
 }
 
+func (s *Server) Engine() *gin.Engine {
+	return s.engine
+}
+
 func (s *Server) Router() http.Handler {
-	return s.router
+	return s.engine
 }
 
 func (s *Server) Cache() *cache.PermissionCache {
@@ -101,98 +109,106 @@ func (s *Server) Cache() *cache.PermissionCache {
 }
 
 func (s *Server) setupRoutes() {
-	r := s.router
+	r := s.engine
 
 	// Global Middlewares
-	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.Recoverer())
 
-	// CORS Configuration
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Tenant-Scope"},
-		ExposedHeaders:   []string{"Link", "X-Tenant-Scope"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	// Custom CORS Middleware
+	r.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, X-Tenant-Scope")
+		c.Header("Access-Control-Expose-Headers", "Link, X-Tenant-Scope")
+		c.Header("Access-Control-Allow-Credentials", "true")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	})
 
 	// Mount Swagger UI & OpenAPI Specification routes
 	docs.RegisterSwaggerRoutes(r)
 
 	// Health check endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	r.GET("/health", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
 		if s.pool != nil {
 			if err := s.pool.Ping(ctx); err != nil {
-				response.Error(w, http.StatusServiceUnavailable, "DB_DOWN", "database connection failed", nil)
+				response.Error(c, http.StatusServiceUnavailable, "DB_DOWN", "database connection failed", nil)
 				return
 			}
 		}
-		response.Success(w, http.StatusOK, "healthy", map[string]interface{}{
+		response.Success(c, http.StatusOK, "healthy", map[string]interface{}{
 			"status":    "UP",
 			"timestamp": time.Now().UTC(),
 		})
 	})
 
-	// API v1 Sub-router
-	r.Route(s.cfg.APIBasePath, func(v1 chi.Router) {
+	// API v1 Sub-router Group
+	v1 := r.Group(s.cfg.APIBasePath)
+	{
 		// Public Authentication Routes
-		v1.Group(func(pub chi.Router) {
-			pub.Post("/auth/login", s.authHandler.Login)
-			pub.Post("/auth/refresh", s.authHandler.Refresh)
-		})
+		v1.POST("/auth/login", s.authHandler.Login)
+		v1.POST("/auth/refresh", s.authHandler.Refresh)
 
 		// Protected Routes (Token authentication & strict tenant isolation)
-		v1.Group(func(prot chi.Router) {
-			prot.Use(middleware.Auth(s.jwtService))
-			prot.Use(middleware.EnforceTenantIsolation())
-
+		prot := v1.Group("")
+		prot.Use(middleware.Auth(s.jwtService))
+		prot.Use(middleware.EnforceTenantIsolation())
+		{
 			// Auth Session Management
-			prot.Get("/auth/me", s.authHandler.Me)
-			prot.Post("/auth/switch-tenant", s.authHandler.SwitchTenant)
-			prot.Post("/auth/logout", s.authHandler.Logout)
+			prot.GET("/auth/me", s.authHandler.Me)
+			prot.POST("/auth/switch-tenant", s.authHandler.SwitchTenant)
+			prot.POST("/auth/logout", s.authHandler.Logout)
 
 			// Tenants Management
-			prot.Route("/tenants", func(tr chi.Router) {
-				tr.Post("/", s.tenantHandler.CreateTenant)
-				tr.Get("/", s.tenantHandler.ListTenants)
-				tr.With(middleware.RequirePermission(s.roleService, domain.PermTenantRead)).Get("/{id}", s.tenantHandler.GetTenant)
-				tr.With(middleware.RequirePermission(s.roleService, domain.PermTenantUpdate)).Put("/{id}", s.tenantHandler.UpdateTenant)
-			})
+			tenants := prot.Group("/tenants")
+			{
+				tenants.POST("", s.tenantHandler.CreateTenant)
+				tenants.GET("", s.tenantHandler.ListTenants)
+				tenants.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermTenantRead), s.tenantHandler.GetTenant)
+				tenants.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermTenantUpdate), s.tenantHandler.UpdateTenant)
+			}
 
 			// Users Management (Strictly Tenant-Scoped)
-			prot.Route("/users", func(ur chi.Router) {
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermUserCreate)).Post("/", s.userHandler.CreateUser)
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermUserRead)).Get("/", s.userHandler.ListUsers)
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermUserRead)).Get("/{id}", s.userHandler.GetUser)
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermUserUpdate)).Put("/{id}", s.userHandler.UpdateUser)
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermUserDelete)).Delete("/{id}", s.userHandler.DeleteUser)
-				ur.With(middleware.RequirePermission(s.roleService, domain.PermRoleAssign)).Post("/{id}/roles", s.userHandler.AssignRoles)
-			})
+			users := prot.Group("/users")
+			{
+				users.POST("", middleware.RequirePermission(s.roleService, domain.PermUserCreate), s.userHandler.CreateUser)
+				users.GET("", middleware.RequirePermission(s.roleService, domain.PermUserRead), s.userHandler.ListUsers)
+				users.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermUserRead), s.userHandler.GetUser)
+				users.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermUserUpdate), s.userHandler.UpdateUser)
+				users.DELETE("/:id", middleware.RequirePermission(s.roleService, domain.PermUserDelete), s.userHandler.DeleteUser)
+				users.POST("/:id/roles", middleware.RequirePermission(s.roleService, domain.PermRoleAssign), s.userHandler.AssignRoles)
+			}
 
 			// Roles Management (Strictly Tenant-Scoped)
-			prot.Route("/roles", func(rr chi.Router) {
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleCreate)).Post("/", s.roleHandler.CreateRole)
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleRead)).Get("/", s.roleHandler.ListRoles)
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleRead)).Get("/{id}", s.roleHandler.GetRole)
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleUpdate)).Put("/{id}", s.roleHandler.UpdateRole)
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleDelete)).Delete("/{id}", s.roleHandler.DeleteRole)
-				rr.With(middleware.RequirePermission(s.roleService, domain.PermRoleUpdate)).Post("/{id}/permissions", s.roleHandler.AssignPermissions)
-			})
+			roles := prot.Group("/roles")
+			{
+				roles.POST("", middleware.RequirePermission(s.roleService, domain.PermRoleCreate), s.roleHandler.CreateRole)
+				roles.GET("", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.roleHandler.ListRoles)
+				roles.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.roleHandler.GetRole)
+				roles.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleUpdate), s.roleHandler.UpdateRole)
+				roles.DELETE("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleDelete), s.roleHandler.DeleteRole)
+				roles.POST("/:id/permissions", middleware.RequirePermission(s.roleService, domain.PermRoleUpdate), s.roleHandler.AssignPermissions)
+			}
 
 			// Permissions Catalog
-			prot.Route("/permissions", func(pr chi.Router) {
-				pr.With(middleware.RequirePermission(s.roleService, domain.PermRoleRead)).Get("/", s.permissionHandler.ListPermissions)
-			})
+			permissions := prot.Group("/permissions")
+			{
+				permissions.GET("", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.permissionHandler.ListPermissions)
+			}
 
 			// Audit Logs (Strictly Tenant-Scoped)
-			prot.Route("/audit-logs", func(ar chi.Router) {
-				ar.With(middleware.RequirePermission(s.roleService, domain.PermAuditRead)).Get("/", s.auditHandler.ListAuditLogs)
-			})
-		})
-	})
+			auditLogs := prot.Group("/audit-logs")
+			{
+				auditLogs.GET("", middleware.RequirePermission(s.roleService, domain.PermAuditRead), s.auditHandler.ListAuditLogs)
+			}
+		}
+	}
 }

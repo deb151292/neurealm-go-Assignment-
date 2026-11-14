@@ -12,19 +12,26 @@ import (
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
 func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	jwtSvc := auth.NewJWTService("my-super-secret-key-32-chars-long!", 15*time.Minute, 24*time.Hour)
-	handler := middleware.Auth(jwtSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	r := gin.New()
+	r.Use(middleware.Auth(jwtSvc))
+	r.GET("/api/v1/users", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	req := httptest.NewRequest("GET", "/api/v1/users", nil)
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
@@ -39,15 +46,17 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	jwtSvc := auth.NewJWTService("my-super-secret-key-32-chars-long!", 15*time.Minute, 24*time.Hour)
-	handler := middleware.Auth(jwtSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	r := gin.New()
+	r.Use(middleware.Auth(jwtSvc))
+	r.GET("/api/v1/users", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	req := httptest.NewRequest("GET", "/api/v1/users", nil)
 	req.Header.Set("Authorization", "Bearer invalid-garbage-token")
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
@@ -63,17 +72,19 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	var capturedTenantID uuid.UUID
 	var capturedUserID uuid.UUID
 
-	handler := middleware.Auth(jwtSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedTenantID, _ = domain.GetTenantID(r.Context())
-		capturedUserID, _ = domain.GetUserID(r.Context())
-		w.WriteHeader(http.StatusOK)
-	}))
+	r := gin.New()
+	r.Use(middleware.Auth(jwtSvc))
+	r.GET("/api/v1/users", func(c *gin.Context) {
+		capturedTenantID, _ = domain.GetTenantID(c.Request.Context())
+		capturedUserID, _ = domain.GetUserID(c.Request.Context())
+		c.Status(http.StatusOK)
+	})
 
 	req := httptest.NewRequest("GET", "/api/v1/users", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)
@@ -87,29 +98,28 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 }
 
 func TestRBACMiddleware_403Forbidden(t *testing.T) {
-	// Initialize cache without DB connection
 	permCache := cache.NewPermissionCache(5*time.Minute, 10*time.Minute)
 	defer permCache.Stop()
 
 	tenantID := uuid.New()
 	userID := uuid.New()
 
-	// Cache user with only "user:read" permission
 	permCache.Set(tenantID, userID, []string{"user:read"})
 
 	roleSvc := role.NewService(nil, permCache, nil)
-	handler := middleware.RequirePermission(roleSvc, "user:create")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	r := gin.New()
+	r.POST("/api/v1/users", middleware.RequirePermission(roleSvc, "user:create"), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	req := httptest.NewRequest("POST", "/api/v1/users", nil)
 	ctx := domain.WithTenantID(req.Context(), tenantID)
 	ctx = domain.WithUserID(ctx, userID)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req.WithContext(ctx))
+	r.ServeHTTP(rec, req)
 
-	// User has "user:read" but requested action requires "user:create" -> 403 Forbidden!
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
 	}
@@ -129,21 +139,21 @@ func TestRBACMiddleware_200Success(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
 
-	// Cache user with "user:create" permission
 	permCache.Set(tenantID, userID, []string{"user:create", "user:read"})
 
 	roleSvc := role.NewService(nil, permCache, nil)
-	handler := middleware.RequirePermission(roleSvc, "user:create")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"success":true}`))
-	}))
+	r := gin.New()
+	r.POST("/api/v1/users", middleware.RequirePermission(roleSvc, "user:create"), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"success": true})
+	})
 
 	req := httptest.NewRequest("POST", "/api/v1/users", nil)
 	ctx := domain.WithTenantID(req.Context(), tenantID)
 	ctx = domain.WithUserID(ctx, userID)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req.WithContext(ctx))
+	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)

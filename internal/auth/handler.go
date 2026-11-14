@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
@@ -27,99 +27,100 @@ func NewHandler(service *Service, userService *user.Service, tenantRepo tenant.R
 	}
 }
 
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	result, err := h.service.Login(r.Context(), req)
+	result, err := h.service.Login(c.Request.Context(), req)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
 	if result.RequiresTenantSelection {
-		response.Success(w, http.StatusOK, "please select a tenant to proceed", result)
+		response.Success(c, http.StatusOK, "please select a tenant to proceed", result)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "login successful", result.Tokens)
+	response.Success(c, http.StatusOK, "login successful", result.Tokens)
 }
 
-func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Refresh(c *gin.Context) {
 	var req RefreshTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	tokens, err := h.service.Refresh(r.Context(), req.RefreshToken)
+	tokens, err := h.service.Refresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "token refreshed successfully", tokens)
+	response.Success(c, http.StatusOK, "token refreshed successfully", tokens)
 }
 
-func (h *Handler) SwitchTenant(w http.ResponseWriter, r *http.Request) {
-	userID, ok := domain.GetUserID(r.Context())
+func (h *Handler) SwitchTenant(c *gin.Context) {
+	userID, ok := domain.GetUserID(c.Request.Context())
 	if !ok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
 	var req SwitchTenantRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
 	}
 
-	tokens, err := h.service.SwitchTenant(r.Context(), userID, req.TenantCode)
+	tokens, err := h.service.SwitchTenant(c.Request.Context(), userID, req.TenantCode)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "tenant switched successfully", tokens)
+	response.Success(c, http.StatusOK, "tenant switched successfully", tokens)
 }
 
-func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Logout(c *gin.Context) {
 	var req RefreshTokenRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	_ = c.ShouldBindJSON(&req)
 
-	if err := h.service.Logout(r.Context(), req.RefreshToken); err != nil {
-		response.FromError(w, err)
+	if err := h.service.Logout(c.Request.Context(), req.RefreshToken); err != nil {
+		response.FromError(c, err)
 		return
 	}
 
-	response.Success(w, http.StatusOK, "logged out successfully", nil)
+	response.Success(c, http.StatusOK, "logged out successfully", nil)
 }
 
-func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-	userID, ok := domain.GetUserID(r.Context())
-	tenantID, tok := domain.GetTenantID(r.Context())
+func (h *Handler) Me(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, ok := domain.GetUserID(ctx)
+	tenantID, tok := domain.GetTenantID(ctx)
 	if !ok || !tok {
-		response.FromError(w, domain.ErrUnauthorized)
+		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	currentUser, err := h.userService.GetUser(r.Context(), tenantID, userID)
+	currentUser, err := h.userService.GetUser(ctx, tenantID, userID)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	currentTenant, err := h.tenantRepo.GetByID(r.Context(), tenantID)
+	currentTenant, err := h.tenantRepo.GetByID(ctx, tenantID)
 	if err != nil {
-		response.FromError(w, err)
+		response.FromError(c, err)
 		return
 	}
 
-	roles, _ := h.roleService.GetUserRoles(r.Context(), tenantID, userID)
-	perms, _ := h.roleService.GetUserPermissions(r.Context(), tenantID, userID)
+	roles, _ := h.roleService.GetUserRoles(ctx, tenantID, userID)
+	perms, _ := h.roleService.GetUserPermissions(ctx, tenantID, userID)
 
 	profile := map[string]interface{}{
 		"user":        currentUser,
@@ -128,5 +129,5 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"permissions": perms,
 	}
 
-	response.Success(w, http.StatusOK, "profile retrieved successfully", profile)
+	response.Success(c, http.StatusOK, "profile retrieved successfully", profile)
 }

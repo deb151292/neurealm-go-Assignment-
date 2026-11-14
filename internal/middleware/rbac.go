@@ -4,55 +4,59 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
 )
 
 // RequirePermission verifies the user has the required resource:action permission
-func RequirePermission(roleService *role.Service, requiredPermission string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check if platform admin
-			if domain.GetPlatformAdmin(r.Context()) {
-				next.ServeHTTP(w, r)
-				return
-			}
+func RequirePermission(roleService *role.Service, requiredPermission string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 
-			tenantID, tok := domain.GetTenantID(r.Context())
-			userID, uok := domain.GetUserID(r.Context())
-			if !tok || !uok {
-				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthenticated user", nil)
-				return
-			}
+		// Check if platform admin
+		if domain.GetPlatformAdmin(ctx) {
+			c.Next()
+			return
+		}
 
-			// Query effective permissions (cached in memory for high-volume)
-			permissions, err := roleService.GetUserPermissions(r.Context(), tenantID, userID)
-			if err != nil {
-				response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify permissions", nil)
-				return
-			}
+		tenantID, tok := domain.GetTenantID(ctx)
+		userID, uok := domain.GetUserID(ctx)
+		if !tok || !uok {
+			response.Error(c, http.StatusUnauthorized, "UNAUTHORIZED", "unauthenticated user", nil)
+			c.Abort()
+			return
+		}
 
-			hasPerm := false
-			for _, p := range permissions {
-				if p == requiredPermission || p == "*:*" {
-					hasPerm = true
-					break
-				}
-			}
+		// Query effective permissions (cached in memory for high-volume)
+		permissions, err := roleService.GetUserPermissions(ctx, tenantID, userID)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify permissions", nil)
+			c.Abort()
+			return
+		}
 
-			if !hasPerm {
-				// Returns 403 Forbidden as per specification
-				response.Error(w, http.StatusForbidden, "FORBIDDEN",
-					fmt.Sprintf("forbidden: insufficient permissions (requires '%s')", requiredPermission),
-					map[string]interface{}{
-						"required_permission": requiredPermission,
-					},
-				)
-				return
+		hasPerm := false
+		for _, p := range permissions {
+			if p == requiredPermission || p == "*:*" {
+				hasPerm = true
+				break
 			}
+		}
 
-			next.ServeHTTP(w, r)
-		})
+		if !hasPerm {
+			// Returns 403 Forbidden as per specification
+			response.Error(c, http.StatusForbidden, "FORBIDDEN",
+				fmt.Sprintf("forbidden: insufficient permissions (requires '%s')", requiredPermission),
+				map[string]interface{}{
+					"required_permission": requiredPermission,
+				},
+			)
+			c.Abort()
+			return
+		}
+
+		c.Next()
 	}
 }
