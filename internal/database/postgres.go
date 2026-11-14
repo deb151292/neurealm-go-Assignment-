@@ -23,7 +23,6 @@ func NewPool(cfg *config.Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to parse database config: %w", err)
 	}
 
-	// High volume connection pool tuning
 	poolConfig.MaxConns = cfg.DBMaxConns
 	poolConfig.MinConns = cfg.DBMinConns
 	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime

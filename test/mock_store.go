@@ -10,17 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// MockStore provides an in-memory thread-safe implementation of all repository interfaces
 type MockStore struct {
 	mu            sync.RWMutex
 	Tenants       map[uuid.UUID]*domain.Tenant
 	Users         map[uuid.UUID]*domain.User
-	TenantUsers   map[string]*domain.TenantUser // key: "tenantID:userID"
+	TenantUsers   map[string]*domain.TenantUser
 	Roles         map[uuid.UUID]*domain.Role
-	RolePerms     map[uuid.UUID][]uuid.UUID // roleID -> []permissionID
-	UserRoles     map[string][]uuid.UUID    // "tenantID:userID" -> []roleID
+	RolePerms     map[uuid.UUID][]uuid.UUID
+	UserRoles     map[string][]uuid.UUID
 	Permissions   map[uuid.UUID]*domain.Permission
-	RefreshTokens map[string]*domain.RefreshToken // key: tokenHash
+	RefreshTokens map[string]*domain.RefreshToken
 	AuditLogs     []domain.AuditLog
 }
 
@@ -37,7 +36,6 @@ func NewMockStore() *MockStore {
 		AuditLogs:     make([]domain.AuditLog, 0),
 	}
 
-	// Seed standard permissions
 	standardPerms := []struct {
 		res, act, desc string
 	}{
@@ -69,7 +67,6 @@ func NewMockStore() *MockStore {
 	return store
 }
 
-// ----------------- Mock Tenant Repo -----------------
 func (m *MockStore) Create(ctx context.Context, t *domain.Tenant) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -147,12 +144,10 @@ func (m *MockStore) List(ctx context.Context, params domain.PaginationParams) ([
 	return list, int64(len(list)), nil
 }
 
-// ----------------- Mock User Repo -----------------
 func (m *MockStore) CreateUserInTenant(ctx context.Context, tenantID uuid.UUID, user *domain.User, roleIDs []uuid.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if email exists
 	var existingUser *domain.User
 	for _, u := range m.Users {
 		if strings.EqualFold(u.Email, user.Email) {
@@ -353,7 +348,6 @@ func (m *MockStore) GetTenantUserMembership(ctx context.Context, tenantID, userI
 	return &copy, nil
 }
 
-// ----------------- Mock Role Repo -----------------
 func (m *MockStore) CreateRole(ctx context.Context, role *domain.Role) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -379,7 +373,7 @@ func (m *MockStore) GetRoleByID(ctx context.Context, tenantID, roleID uuid.UUID)
 
 	r, ok := m.Roles[roleID]
 	if !ok || r.TenantID != tenantID {
-		return nil, domain.ErrNotFound // Cross tenant returns 404
+		return nil, domain.ErrNotFound
 	}
 
 	copy := *r
@@ -413,7 +407,7 @@ func (m *MockStore) UpdateRole(ctx context.Context, tenantID, roleID uuid.UUID, 
 
 	r, ok := m.Roles[roleID]
 	if !ok || r.TenantID != tenantID {
-		return nil, domain.ErrNotFound // Cross-tenant access returns 404
+		return nil, domain.ErrNotFound
 	}
 
 	r.Name = name
@@ -429,7 +423,7 @@ func (m *MockStore) DeleteRole(ctx context.Context, tenantID, roleID uuid.UUID) 
 
 	r, ok := m.Roles[roleID]
 	if !ok || r.TenantID != tenantID {
-		return domain.ErrNotFound // Cross-tenant returns 404
+		return domain.ErrNotFound
 	}
 	if r.IsSystem {
 		return domain.ErrCannotDeleteAdmin
@@ -446,7 +440,7 @@ func (m *MockStore) AssignPermissions(ctx context.Context, tenantID, roleID uuid
 
 	r, ok := m.Roles[roleID]
 	if !ok || r.TenantID != tenantID {
-		return domain.ErrNotFound // Cross-tenant returns 404
+		return domain.ErrNotFound
 	}
 
 	m.RolePerms[roleID] = permissionIDs
@@ -513,7 +507,6 @@ func (m *MockStore) GetUserPermissions(ctx context.Context, tenantID, userID uui
 	return list, nil
 }
 
-// ----------------- Mock Auth Repo -----------------
 func (m *MockStore) StoreRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -560,7 +553,6 @@ func (m *MockStore) RevokeAllUserTokens(ctx context.Context, tenantID, userID uu
 	return nil
 }
 
-// ----------------- Mock Audit Repo -----------------
 func (m *MockStore) CreateAudit(ctx context.Context, log *domain.AuditLog) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -589,7 +581,6 @@ func (m *MockStore) ListAuditByTenant(ctx context.Context, tenantID uuid.UUID, p
 	return list, int64(len(list)), nil
 }
 
-// ----------------- Mock Permission Repo -----------------
 func (m *MockStore) ListAllPermissions(ctx context.Context) ([]domain.Permission, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -600,8 +591,6 @@ func (m *MockStore) ListAllPermissions(ctx context.Context) ([]domain.Permission
 	}
 	return list, nil
 }
-
-// Adapters to satisfy package interfaces cleanly:
 
 type tenantRepoAdapter struct{ store *MockStore }
 

@@ -6,19 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// Tenant Status constants
 const (
 	TenantStatusActive    = "active"
 	TenantStatusSuspended = "suspended"
 )
 
-// User / TenantUser Status constants
 const (
 	UserStatusActive    = "active"
 	UserStatusSuspended = "suspended"
 )
 
-// Standard Permission Names (resource:action)
 const (
 	PermUserCreate = "user:create"
 	PermUserRead   = "user:read"
@@ -37,7 +34,6 @@ const (
 	PermAuditRead = "audit:read"
 )
 
-// Tenant represents an organization/tenant in the system
 type Tenant struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -47,24 +43,22 @@ type Tenant struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// User represents a global user identity
 type User struct {
-	ID              uuid.UUID  `json:"id"`
-	Email           string     `json:"email"`
-	PasswordHash    string     `json:"-"`
-	FirstName       string     `json:"first_name"`
-	LastName        string     `json:"last_name"`
-	IsPlatformAdmin bool       `json:"is_platform_admin"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	// Tenant-specific fields when fetched in tenant context:
-	TenantID        *uuid.UUID `json:"tenant_id,omitempty"`
-	TenantStatus    *string    `json:"tenant_status,omitempty"`
-	Roles           []Role     `json:"roles,omitempty"`
-	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
+	ID              uuid.UUID `json:"id"`
+	Email           string    `json:"email"`
+	PasswordHash    string    `json:"-"`
+	FirstName       string    `json:"first_name"`
+	LastName        string    `json:"last_name"`
+	IsPlatformAdmin bool      `json:"is_platform_admin"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+
+	TenantID     *uuid.UUID `json:"tenant_id,omitempty"`
+	TenantStatus *string    `json:"tenant_status,omitempty"`
+	Roles        []Role     `json:"roles,omitempty"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }
 
-// TenantUser represents the association between a User and a Tenant
 type TenantUser struct {
 	ID        uuid.UUID  `json:"id"`
 	TenantID  uuid.UUID  `json:"tenant_id"`
@@ -75,7 +69,6 @@ type TenantUser struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
-// Permission represents a fine-grained resource:action grant
 type Permission struct {
 	ID          uuid.UUID `json:"id"`
 	Resource    string    `json:"resource"`
@@ -88,7 +81,6 @@ func (p Permission) String() string {
 	return p.Resource + ":" + p.Action
 }
 
-// Role represents a tenant-specific role
 type Role struct {
 	ID          uuid.UUID    `json:"id"`
 	TenantID    uuid.UUID    `json:"tenant_id"`
@@ -100,7 +92,6 @@ type Role struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
-// UserRole represents a role assignment to a user in a tenant
 type UserRole struct {
 	ID        uuid.UUID `json:"id"`
 	TenantID  uuid.UUID `json:"tenant_id"`
@@ -109,7 +100,6 @@ type UserRole struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// RefreshToken represents a stored refresh token for session tracking & revocation
 type RefreshToken struct {
 	ID        uuid.UUID `json:"id"`
 	TokenHash string    `json:"-"`
@@ -120,7 +110,6 @@ type RefreshToken struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// AuditLog tracks security and data modification events
 type AuditLog struct {
 	ID         uuid.UUID              `json:"id"`
 	TenantID   *uuid.UUID             `json:"tenant_id,omitempty"`
@@ -133,7 +122,6 @@ type AuditLog struct {
 	CreatedAt  time.Time              `json:"created_at"`
 }
 
-// PaginationParams encapsulates standard pagination inputs
 type PaginationParams struct {
 	Page   int    `json:"page"`
 	Limit  int    `json:"limit"`

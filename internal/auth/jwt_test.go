@@ -73,7 +73,7 @@ func TestJWTService_TamperedSecret(t *testing.T) {
 }
 
 func TestJWTService_ExpiredToken(t *testing.T) {
-	// Negative expiry for immediate expiration
+
 	svc := auth.NewJWTService("my-super-secret-key-32-chars-long!", -1*time.Minute, 24*time.Hour)
 
 	user := &domain.User{ID: uuid.New(), Email: "test@example.com"}

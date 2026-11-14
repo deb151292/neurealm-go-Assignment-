@@ -16,7 +16,6 @@ func TestSwagger_Endpoints(t *testing.T) {
 	r := gin.New()
 	docs.RegisterSwaggerRoutes(r)
 
-	// 1. Test /swagger/doc.json
 	reqJSON := httptest.NewRequest("GET", "/swagger/doc.json", nil)
 	recJSON := httptest.NewRecorder()
 	r.ServeHTTP(recJSON, reqJSON)
@@ -33,7 +32,6 @@ func TestSwagger_Endpoints(t *testing.T) {
 		t.Errorf("expected openapi 3.0.3, got %v", jsonSpec["openapi"])
 	}
 
-	// 2. Test /swagger/openapi.yaml
 	reqYAML := httptest.NewRequest("GET", "/swagger/openapi.yaml", nil)
 	recYAML := httptest.NewRecorder()
 	r.ServeHTTP(recYAML, reqYAML)
@@ -45,7 +43,6 @@ func TestSwagger_Endpoints(t *testing.T) {
 		t.Errorf("expected openapi.yaml to contain 'openapi: 3.0.3'")
 	}
 
-	// 3. Test /swagger/index.html
 	reqUI := httptest.NewRequest("GET", "/swagger/index.html", nil)
 	recUI := httptest.NewRecorder()
 	r.ServeHTTP(recUI, reqUI)
@@ -57,7 +54,6 @@ func TestSwagger_Endpoints(t *testing.T) {
 		t.Errorf("expected Swagger UI HTML page, got %s", recUI.Body.String())
 	}
 
-	// 4. Test Redirects: /swagger -> /swagger/index.html
 	reqRedirect := httptest.NewRequest("GET", "/swagger", nil)
 	recRedirect := httptest.NewRecorder()
 	r.ServeHTTP(recRedirect, reqRedirect)
@@ -69,7 +65,6 @@ func TestSwagger_Endpoints(t *testing.T) {
 		t.Errorf("expected redirect to /swagger/index.html, got %s", loc)
 	}
 
-	// 5. Test Redirects: /docs -> /swagger/index.html
 	reqDocs := httptest.NewRequest("GET", "/docs", nil)
 	recDocs := httptest.NewRecorder()
 	r.ServeHTTP(recDocs, reqDocs)

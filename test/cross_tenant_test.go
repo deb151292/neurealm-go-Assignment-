@@ -117,13 +117,11 @@ func setupTestEnv(t *testing.T) *TestEnv {
 
 	ctx := context.Background()
 
-	// 1. Create Tenant A & Tenant B
 	tA := &domain.Tenant{ID: uuid.New(), Name: "Acme Corp", Code: "acme-corp", Status: domain.TenantStatusActive}
 	tB := &domain.Tenant{ID: uuid.New(), Name: "Globex Corporation", Code: "globex", Status: domain.TenantStatusActive}
 	_ = store.Create(ctx, tA)
 	_ = store.Create(ctx, tB)
 
-	// 2. Create Roles in Tenant A & Tenant B
 	allPerms, _ := store.ListAllPermissions(ctx)
 	allPermIDs := make([]uuid.UUID, len(allPerms))
 	allPermStrings := make([]string, len(allPerms))
@@ -140,7 +138,6 @@ func setupTestEnv(t *testing.T) *TestEnv {
 	_ = store.CreateRole(ctx, roleAdminB)
 	_ = store.AssignPermissions(ctx, tB.ID, roleAdminB.ID, allPermIDs)
 
-	// 3. Create Users
 	hash, _ := bcrypt.GenerateFromPassword([]byte("Password123!"), bcrypt.DefaultCost)
 	uA := &domain.User{Email: "user.a@acme.com", PasswordHash: string(hash), FirstName: "User", LastName: "Acme"}
 	_ = store.CreateUserInTenant(ctx, tA.ID, uA, []uuid.UUID{roleAdminA.ID})
@@ -148,12 +145,10 @@ func setupTestEnv(t *testing.T) *TestEnv {
 	uB := &domain.User{Email: "user.b@globex.com", PasswordHash: string(hash), FirstName: "User", LastName: "Globex"}
 	_ = store.CreateUserInTenant(ctx, tB.ID, uB, []uuid.UUID{roleAdminB.ID})
 
-	// Multi-tenant user Alice
 	uAlice := &domain.User{Email: "alice@multi.com", PasswordHash: string(hash), FirstName: "Alice", LastName: "Multi"}
 	_ = store.CreateUserInTenant(ctx, tA.ID, uAlice, []uuid.UUID{roleAdminA.ID})
 	_ = store.CreateUserInTenant(ctx, tB.ID, uAlice, []uuid.UUID{roleAdminB.ID})
 
-	// Generate Scoped Tokens
 	tokenA, _ := jwtSvc.GenerateAccessToken(uA, tA, []string{"Admin"}, allPermStrings)
 	tokenB, _ := jwtSvc.GenerateAccessToken(uB, tB, []string{"Admin"}, allPermStrings)
 
@@ -172,19 +167,15 @@ func setupTestEnv(t *testing.T) *TestEnv {
 	}
 }
 
-// ----------------- CROSS-TENANT ISOLATION TESTS -----------------
-
 func TestCrossTenant_GetUser_Returns404(t *testing.T) {
 	env := setupTestEnv(t)
 
-	// Tenant B attempts to read Tenant A's user UserAInTenantA
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s", env.UserAInTenantA.ID), nil)
-	req.Header.Set("Authorization", "Bearer "+env.TokenB) // Token from Tenant B!
+	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	rec := httptest.NewRecorder()
 
 	env.Router.ServeHTTP(rec, req)
 
-	// Cross-tenant access MUST return 404 Not Found to prevent tenant data enumeration
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected HTTP 404 for cross-tenant user lookup, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -201,7 +192,7 @@ func TestCrossTenant_UpdateUser_Returns404(t *testing.T) {
 
 	payload := `{"first_name": "Hacked", "last_name": "User"}`
 	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/v1/users/%s", env.UserAInTenantA.ID), bytes.NewBufferString(payload))
-	req.Header.Set("Authorization", "Bearer "+env.TokenB) // Tenant B token
+	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -216,7 +207,7 @@ func TestCrossTenant_DeleteUser_Returns404(t *testing.T) {
 	env := setupTestEnv(t)
 
 	req := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%s", env.UserAInTenantA.ID), nil)
-	req.Header.Set("Authorization", "Bearer "+env.TokenB) // Tenant B token
+	req.Header.Set("Authorization", "Bearer "+env.TokenB)
 	rec := httptest.NewRecorder()
 
 	env.Router.ServeHTTP(rec, req)
@@ -329,8 +320,6 @@ func TestCrossTenant_AuditLogsIsolation(t *testing.T) {
 	}
 }
 
-// ----------------- AUTHORIZATION 401 VS 403 TESTS -----------------
-
 func TestAuth_401Unauthorized_NoToken(t *testing.T) {
 	env := setupTestEnv(t)
 
@@ -376,8 +365,6 @@ func TestAuth_403Forbidden_MissingPermission(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden when user lacks permission, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
-
-// ----------------- SOFT DELETE & MEMBERSHIP TESTS -----------------
 
 func TestUser_SoftDelete_ExcludesFromQuery(t *testing.T) {
 	env := setupTestEnv(t)

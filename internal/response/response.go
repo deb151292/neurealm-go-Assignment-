@@ -79,7 +79,6 @@ func Error(c *gin.Context, status int, code, message string, details map[string]
 	})
 }
 
-// FromError converts a Go error or domain.AppError into a standardized Gin HTTP response
 func FromError(c *gin.Context, err error) {
 	if err == nil {
 		return

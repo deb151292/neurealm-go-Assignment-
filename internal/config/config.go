@@ -26,7 +26,7 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	// Attempt to load .env if present; ignore error if not found
+
 	_ = godotenv.Load()
 
 	cfg := &Config{
@@ -41,7 +41,7 @@ func Load() (*Config, error) {
 		DBHealthCheckPeriod: getEnvAsDuration("DB_HEALTH_CHECK_PERIOD", time.Minute),
 		JWTSecret:           getEnv("JWT_SECRET", "super-secret-default-jwt-key-minimum-32-bytes!"),
 		JWTAccessExpiry:     getEnvAsDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
-		JWTRefreshExpiry:    getEnvAsDuration("JWT_REFRESH_EXPIRY", 168*time.Hour), // 7 days
+		JWTRefreshExpiry:    getEnvAsDuration("JWT_REFRESH_EXPIRY", 168*time.Hour),
 		CacheTTL:            getEnvAsDuration("CACHE_TTL", 5*time.Minute),
 		CacheCleanupPeriod:  getEnvAsDuration("CACHE_CLEANUP_INTERVAL", 10*time.Minute),
 	}

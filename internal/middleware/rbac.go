@@ -10,12 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RequirePermission verifies the user has the required resource:action permission
 func RequirePermission(roleService *service.RoleService, requiredPermission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		// Check if platform admin
 		if domain.GetPlatformAdmin(ctx) {
 			c.Next()
 			return
@@ -29,7 +27,6 @@ func RequirePermission(roleService *service.RoleService, requiredPermission stri
 			return
 		}
 
-		// Query effective permissions (cached in memory for high-volume)
 		permissions, err := roleService.GetUserPermissions(ctx, tenantID, userID)
 		if err != nil {
 			response.Error(c, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify permissions", nil)
@@ -46,7 +43,7 @@ func RequirePermission(roleService *service.RoleService, requiredPermission stri
 		}
 
 		if !hasPerm {
-			// Returns 403 Forbidden as per specification
+
 			response.Error(c, http.StatusForbidden, "FORBIDDEN",
 				fmt.Sprintf("forbidden: insufficient permissions (requires '%s')", requiredPermission),
 				map[string]interface{}{

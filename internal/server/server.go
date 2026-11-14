@@ -31,13 +31,9 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// 1. Core Services & Cache
 	permCache := cache.NewPermissionCache(cfg.CacheTTL, cfg.CacheCleanupPeriod)
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 
-	// 2. Handlers: pgxpool.Pool is passed directly into handlers, which initializes
-	// and propagates the pool into services and repositories internally.
-	// server.go no longer directly calls or imports repository or service layers.
 	handlers := handler.NewHandlers(pool, jwtSvc, permCache)
 
 	engine := gin.New()
@@ -75,11 +71,9 @@ func (s *Server) setupRoutes() {
 	r := s.engine
 	h := s.handlers
 
-	// Global Middlewares
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.Recoverer())
 
-	// Custom CORS Middleware
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -95,10 +89,8 @@ func (s *Server) setupRoutes() {
 		c.Next()
 	})
 
-	// Mount Swagger UI & OpenAPI Specification routes
 	docs.RegisterSwaggerRoutes(r)
 
-	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
@@ -114,24 +106,21 @@ func (s *Server) setupRoutes() {
 		})
 	})
 
-	// API v1 Sub-router Group
 	v1 := r.Group(s.cfg.APIBasePath)
 	{
-		// Public Authentication Routes
+
 		v1.POST("/auth/login", h.Auth.Login)
 		v1.POST("/auth/refresh", h.Auth.Refresh)
 
-		// Protected Routes (Token authentication & strict tenant isolation)
 		prot := v1.Group("")
 		prot.Use(middleware.Auth(s.jwtService))
 		prot.Use(middleware.EnforceTenantIsolation())
 		{
-			// Auth Session Management
+
 			prot.GET("/auth/me", h.Auth.Me)
 			prot.POST("/auth/switch-tenant", h.Auth.SwitchTenant)
 			prot.POST("/auth/logout", h.Auth.Logout)
 
-			// Tenants Management
 			tenants := prot.Group("/tenants")
 			{
 				tenants.POST("", h.Tenant.CreateTenant)
@@ -140,7 +129,6 @@ func (s *Server) setupRoutes() {
 				tenants.PUT("/:id", middleware.RequirePermission(h.RoleService, domain.PermTenantUpdate), h.Tenant.UpdateTenant)
 			}
 
-			// Users Management (Strictly Tenant-Scoped)
 			users := prot.Group("/users")
 			{
 				users.POST("", middleware.RequirePermission(h.RoleService, domain.PermUserCreate), h.User.CreateUser)
@@ -151,7 +139,6 @@ func (s *Server) setupRoutes() {
 				users.POST("/:id/roles", middleware.RequirePermission(h.RoleService, domain.PermRoleAssign), h.User.AssignRoles)
 			}
 
-			// Roles Management (Strictly Tenant-Scoped)
 			roles := prot.Group("/roles")
 			{
 				roles.POST("", middleware.RequirePermission(h.RoleService, domain.PermRoleCreate), h.Role.CreateRole)
@@ -162,13 +149,11 @@ func (s *Server) setupRoutes() {
 				roles.POST("/:id/permissions", middleware.RequirePermission(h.RoleService, domain.PermRoleUpdate), h.Role.AssignPermissions)
 			}
 
-			// Permissions Catalog
 			permissions := prot.Group("/permissions")
 			{
 				permissions.GET("", middleware.RequirePermission(h.RoleService, domain.PermRoleRead), h.Permission.ListPermissions)
 			}
 
-			// Audit Logs (Strictly Tenant-Scoped)
 			auditLogs := prot.Group("/audit-logs")
 			{
 				auditLogs.GET("", middleware.RequirePermission(h.RoleService, domain.PermAuditRead), h.Audit.ListAuditLogs)

@@ -17,16 +17,13 @@ func TestPermissionCache_SetAndGet(t *testing.T) {
 	userID := uuid.New()
 	permissions := []string{"user:create", "user:read", "role:assign"}
 
-	// Before set
 	perms, found := c.Get(tenantID, userID)
 	if found || perms != nil {
 		t.Fatalf("expected cache miss before set, got %v", perms)
 	}
 
-	// Set
 	c.Set(tenantID, userID, permissions)
 
-	// After set
 	perms, found = c.Get(tenantID, userID)
 	if !found {
 		t.Fatalf("expected cache hit after set")
@@ -35,7 +32,6 @@ func TestPermissionCache_SetAndGet(t *testing.T) {
 		t.Fatalf("expected 3 permissions, got %d", len(perms))
 	}
 
-	// HasPermission check
 	has, found := c.HasPermission(tenantID, userID, "user:create")
 	if !found || !has {
 		t.Errorf("expected user to have user:create permission")
@@ -58,7 +54,6 @@ func TestPermissionCache_InvalidateUser(t *testing.T) {
 	c.Set(tenantID, user1, []string{"user:read"})
 	c.Set(tenantID, user2, []string{"user:read"})
 
-	// Invalidate user1
 	c.InvalidateUser(tenantID, user1)
 
 	_, found1 := c.Get(tenantID, user1)
@@ -97,7 +92,7 @@ func TestPermissionCache_InvalidateTenant(t *testing.T) {
 }
 
 func TestPermissionCache_Expiration(t *testing.T) {
-	// 50ms TTL
+
 	c := cache.NewPermissionCache(50*time.Millisecond, 100*time.Millisecond)
 	defer c.Stop()
 

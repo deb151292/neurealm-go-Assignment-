@@ -28,10 +28,10 @@ func TestValidator_TenantCode(t *testing.T) {
 		{"acme-corp", true},
 		{"globex", true},
 		{"org-123", true},
-		{"Abc", false},       // uppercase
-		{"a", false},         // too short
-		{"org_name", false},  // underscores not permitted in slug
-		{"org--name", false}, // double hyphen
+		{"Abc", false},
+		{"a", false},
+		{"org_name", false},
+		{"org--name", false},
 		{"-org", false},
 	}
 

@@ -26,7 +26,6 @@ func NewMigrator(pool *pgxpool.Pool, migrationsDir string) *Migrator {
 	}
 }
 
-// openSQLDB opens a standard *sql.DB instance using pgx driver for Goose
 func (m *Migrator) openSQLDB() (*sql.DB, error) {
 	connConfig := m.pool.Config().ConnConfig
 	connStr := connConfig.ConnString()
@@ -38,7 +37,6 @@ func (m *Migrator) openSQLDB() (*sql.DB, error) {
 	return db, nil
 }
 
-// Up runs all pending goose migrations from the migrations directory
 func (m *Migrator) Up(ctx context.Context) error {
 	db, err := m.openSQLDB()
 	if err != nil {
@@ -59,7 +57,6 @@ func (m *Migrator) Up(ctx context.Context) error {
 	return nil
 }
 
-// Down rolls back the most recent goose migration
 func (m *Migrator) Down(ctx context.Context) error {
 	db, err := m.openSQLDB()
 	if err != nil {
@@ -80,7 +77,6 @@ func (m *Migrator) Down(ctx context.Context) error {
 	return nil
 }
 
-// Status prints the status of all migrations
 func (m *Migrator) Status(ctx context.Context) error {
 	db, err := m.openSQLDB()
 	if err != nil {
@@ -95,7 +91,6 @@ func (m *Migrator) Status(ctx context.Context) error {
 	return goose.StatusContext(ctx, db, m.migrationsDir)
 }
 
-// AutoMigrate is an alias for Up to automatically migrate schema on startup
 func (m *Migrator) AutoMigrate(ctx context.Context, dir string) error {
 	if dir != "" {
 		m.migrationsDir = dir
@@ -103,7 +98,6 @@ func (m *Migrator) AutoMigrate(ctx context.Context, dir string) error {
 	return m.Up(ctx)
 }
 
-// ExecSQL executes raw SQL statements in a database transaction
 func (m *Migrator) ExecSQL(ctx context.Context, sqlScript string) error {
 	tx, err := m.pool.Begin(ctx)
 	if err != nil {

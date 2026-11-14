@@ -34,7 +34,6 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 			return
 		}
 
-		// Inject into both Gin context and standard request context
 		ctx := c.Request.Context()
 		ctx = domain.WithTenantID(ctx, claims.TenantID)
 		ctx = domain.WithTenantCode(ctx, claims.TenantCode)

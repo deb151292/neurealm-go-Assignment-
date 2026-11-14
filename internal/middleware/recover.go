@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Recoverer catches unhandled panics and returns a clean JSON 500 response
 func Recoverer() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

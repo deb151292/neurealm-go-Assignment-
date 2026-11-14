@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// EnforceTenantIsolation ensures that tenant context is strictly derived from the verified token
 func EnforceTenantIsolation() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenantID, ok := domain.GetTenantID(c.Request.Context())
@@ -18,7 +17,6 @@ func EnforceTenantIsolation() gin.HandlerFunc {
 			return
 		}
 
-		// Add strict tenant-isolation headers to response
 		c.Header("X-Tenant-Scope", tenantID.String())
 
 		c.Next()

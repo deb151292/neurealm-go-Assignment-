@@ -15,17 +15,17 @@ type cachedPermissions struct {
 }
 
 type PermissionCache struct {
-	mu      sync.RWMutex
-	items   map[string]cachedPermissions
-	ttl     time.Duration
-	stopCh  chan struct{}
+	mu     sync.RWMutex
+	items  map[string]cachedPermissions
+	ttl    time.Duration
+	stopCh chan struct{}
 }
 
 func NewPermissionCache(ttl, cleanupInterval time.Duration) *PermissionCache {
 	c := &PermissionCache{
-		items:   make(map[string]cachedPermissions),
-		ttl:     ttl,
-		stopCh:  make(chan struct{}),
+		items:  make(map[string]cachedPermissions),
+		ttl:    ttl,
+		stopCh: make(chan struct{}),
 	}
 
 	go c.startCleaner(cleanupInterval)
@@ -36,7 +36,6 @@ func (c *PermissionCache) cacheKey(tenantID, userID uuid.UUID) string {
 	return fmt.Sprintf("%s:%s", tenantID.String(), userID.String())
 }
 
-// Get checks if the user's permissions for the tenant are cached and not expired
 func (c *PermissionCache) Get(tenantID, userID uuid.UUID) (map[string]struct{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -54,7 +53,6 @@ func (c *PermissionCache) Get(tenantID, userID uuid.UUID) (map[string]struct{}, 
 	return item.perms, true
 }
 
-// HasPermission checks if the user has a specific permission from cache
 func (c *PermissionCache) HasPermission(tenantID, userID uuid.UUID, permission string) (bool, bool) {
 	perms, found := c.Get(tenantID, userID)
 	if !found {
@@ -64,7 +62,6 @@ func (c *PermissionCache) HasPermission(tenantID, userID uuid.UUID, permission s
 	return has, true
 }
 
-// Set stores the user's permissions in cache
 func (c *PermissionCache) Set(tenantID, userID uuid.UUID, permissions []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -81,7 +78,6 @@ func (c *PermissionCache) Set(tenantID, userID uuid.UUID, permissions []string) 
 	}
 }
 
-// InvalidateUser evicts a specific user's cache in a tenant
 func (c *PermissionCache) InvalidateUser(tenantID, userID uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -90,7 +86,6 @@ func (c *PermissionCache) InvalidateUser(tenantID, userID uuid.UUID) {
 	delete(c.items, key)
 }
 
-// InvalidateTenant evicts all cached entries for a given tenant
 func (c *PermissionCache) InvalidateTenant(tenantID uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -103,7 +98,6 @@ func (c *PermissionCache) InvalidateTenant(tenantID uuid.UUID) {
 	}
 }
 
-// Clear removes all cached items
 func (c *PermissionCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -111,7 +105,6 @@ func (c *PermissionCache) Clear() {
 	c.items = make(map[string]cachedPermissions)
 }
 
-// Stop cleanly terminates the background cleanup goroutine
 func (c *PermissionCache) Stop() {
 	close(c.stopCh)
 }

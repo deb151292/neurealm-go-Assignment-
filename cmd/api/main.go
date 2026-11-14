@@ -19,20 +19,17 @@ import (
 func main() {
 	log.Println("[API] Starting Multi-Tenant User Management System...")
 
-	// 1. Load Configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("[API] Failed to load configuration: %v", err)
 	}
 
-	// 2. Initialize PostgreSQL connection pool using pgxpool
 	db, err := database.NewPool(cfg)
 	if err != nil {
 		log.Fatalf("[API] Database connection error: %v", err)
 	}
 	defer db.Close()
 
-	// 3. Auto-apply migrations using Goose
 	migrator := database.NewMigrator(db.Pool, "./database/migrations")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := migrator.Up(ctx); err != nil {
@@ -40,7 +37,6 @@ func main() {
 	}
 	cancel()
 
-	// 4. Initialize HTTP Server
 	srv := server.NewServer(cfg, db.Pool)
 
 	httpServer := &http.Server{
@@ -51,7 +47,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// 5. Start Server in goroutine
 	go func() {
 		log.Printf("[API] Server listening on http://0.0.0.0:%s (Base: %s)", cfg.Port, cfg.APIBasePath)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -59,7 +54,6 @@ func main() {
 		}
 	}()
 
-	// 6. Graceful Shutdown on Interrupt
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
