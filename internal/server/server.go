@@ -12,9 +12,7 @@ import (
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/handler"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,18 +23,7 @@ type Server struct {
 	engine     *gin.Engine
 	cache      *cache.PermissionCache
 	jwtService *auth.JWTService
-
-	// Handlers
-	authHandler       *handler.AuthHandler
-	tenantHandler     *handler.TenantHandler
-	userHandler       *handler.UserHandler
-	roleHandler       *handler.RoleHandler
-	permissionHandler *handler.PermissionHandler
-	auditHandler      *handler.AuditHandler
-
-	// Services
-	roleService *service.RoleService
-	userService *service.UserService
+	handlers   *handler.Handlers
 }
 
 func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
@@ -48,46 +35,20 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	permCache := cache.NewPermissionCache(cfg.CacheTTL, cfg.CacheCleanupPeriod)
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 
-	// 2. Repositories
-	auditRepo := repository.NewAuditRepository(pool)
-	tenantRepo := repository.NewTenantRepository(pool)
-	roleRepo := repository.NewRoleRepository(pool)
-	userRepo := repository.NewUserRepository(pool)
-	authRepo := repository.NewAuthRepository(pool)
-	permRepo := repository.NewPermissionRepository(pool)
-
-	// 3. Domain Services
-	auditSvc := service.NewAuditService(auditRepo)
-	tenantSvc := service.NewTenantService(tenantRepo, pool, auditSvc)
-	roleSvc := service.NewRoleService(roleRepo, permCache, auditSvc)
-	userSvc := service.NewUserService(userRepo, permCache, auditSvc)
-	permSvc := service.NewPermissionService(permRepo)
-	authSvc := service.NewAuthService(authRepo, userRepo, tenantRepo, roleRepo, jwtSvc, permCache, auditSvc)
-
-	// 4. Handlers
-	authH := handler.NewAuthHandler(authSvc, userSvc, tenantRepo, roleSvc)
-	tenantH := handler.NewTenantHandler(tenantSvc)
-	userH := handler.NewUserHandler(userSvc, roleSvc)
-	roleH := handler.NewRoleHandler(roleSvc)
-	permH := handler.NewPermissionHandler(permSvc)
-	auditH := handler.NewAuditHandler(auditSvc)
+	// 2. Handlers: pgxpool.Pool is passed directly into handlers, which initializes
+	// and propagates the pool into services and repositories internally.
+	// server.go no longer directly calls or imports repository or service layers.
+	handlers := handler.NewHandlers(pool, jwtSvc, permCache)
 
 	engine := gin.New()
 
 	s := &Server{
-		cfg:               cfg,
-		pool:              pool,
-		engine:            engine,
-		cache:             permCache,
-		jwtService:        jwtSvc,
-		authHandler:       authH,
-		tenantHandler:     tenantH,
-		userHandler:       userH,
-		roleHandler:       roleH,
-		permissionHandler: permH,
-		auditHandler:      auditH,
-		roleService:       roleSvc,
-		userService:       userSvc,
+		cfg:        cfg,
+		pool:       pool,
+		engine:     engine,
+		cache:      permCache,
+		jwtService: jwtSvc,
+		handlers:   handlers,
 	}
 
 	s.setupRoutes()
@@ -106,8 +67,13 @@ func (s *Server) Cache() *cache.PermissionCache {
 	return s.cache
 }
 
+func (s *Server) Handlers() *handler.Handlers {
+	return s.handlers
+}
+
 func (s *Server) setupRoutes() {
 	r := s.engine
+	h := s.handlers
 
 	// Global Middlewares
 	r.Use(middleware.RequestLogger())
@@ -152,8 +118,8 @@ func (s *Server) setupRoutes() {
 	v1 := r.Group(s.cfg.APIBasePath)
 	{
 		// Public Authentication Routes
-		v1.POST("/auth/login", s.authHandler.Login)
-		v1.POST("/auth/refresh", s.authHandler.Refresh)
+		v1.POST("/auth/login", h.Auth.Login)
+		v1.POST("/auth/refresh", h.Auth.Refresh)
 
 		// Protected Routes (Token authentication & strict tenant isolation)
 		prot := v1.Group("")
@@ -161,51 +127,51 @@ func (s *Server) setupRoutes() {
 		prot.Use(middleware.EnforceTenantIsolation())
 		{
 			// Auth Session Management
-			prot.GET("/auth/me", s.authHandler.Me)
-			prot.POST("/auth/switch-tenant", s.authHandler.SwitchTenant)
-			prot.POST("/auth/logout", s.authHandler.Logout)
+			prot.GET("/auth/me", h.Auth.Me)
+			prot.POST("/auth/switch-tenant", h.Auth.SwitchTenant)
+			prot.POST("/auth/logout", h.Auth.Logout)
 
 			// Tenants Management
 			tenants := prot.Group("/tenants")
 			{
-				tenants.POST("", s.tenantHandler.CreateTenant)
-				tenants.GET("", s.tenantHandler.ListTenants)
-				tenants.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermTenantRead), s.tenantHandler.GetTenant)
-				tenants.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermTenantUpdate), s.tenantHandler.UpdateTenant)
+				tenants.POST("", h.Tenant.CreateTenant)
+				tenants.GET("", h.Tenant.ListTenants)
+				tenants.GET("/:id", middleware.RequirePermission(h.RoleService, domain.PermTenantRead), h.Tenant.GetTenant)
+				tenants.PUT("/:id", middleware.RequirePermission(h.RoleService, domain.PermTenantUpdate), h.Tenant.UpdateTenant)
 			}
 
 			// Users Management (Strictly Tenant-Scoped)
 			users := prot.Group("/users")
 			{
-				users.POST("", middleware.RequirePermission(s.roleService, domain.PermUserCreate), s.userHandler.CreateUser)
-				users.GET("", middleware.RequirePermission(s.roleService, domain.PermUserRead), s.userHandler.ListUsers)
-				users.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermUserRead), s.userHandler.GetUser)
-				users.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermUserUpdate), s.userHandler.UpdateUser)
-				users.DELETE("/:id", middleware.RequirePermission(s.roleService, domain.PermUserDelete), s.userHandler.DeleteUser)
-				users.POST("/:id/roles", middleware.RequirePermission(s.roleService, domain.PermRoleAssign), s.userHandler.AssignRoles)
+				users.POST("", middleware.RequirePermission(h.RoleService, domain.PermUserCreate), h.User.CreateUser)
+				users.GET("", middleware.RequirePermission(h.RoleService, domain.PermUserRead), h.User.ListUsers)
+				users.GET("/:id", middleware.RequirePermission(h.RoleService, domain.PermUserRead), h.User.GetUser)
+				users.PUT("/:id", middleware.RequirePermission(h.RoleService, domain.PermUserUpdate), h.User.UpdateUser)
+				users.DELETE("/:id", middleware.RequirePermission(h.RoleService, domain.PermUserDelete), h.User.DeleteUser)
+				users.POST("/:id/roles", middleware.RequirePermission(h.RoleService, domain.PermRoleAssign), h.User.AssignRoles)
 			}
 
 			// Roles Management (Strictly Tenant-Scoped)
 			roles := prot.Group("/roles")
 			{
-				roles.POST("", middleware.RequirePermission(s.roleService, domain.PermRoleCreate), s.roleHandler.CreateRole)
-				roles.GET("", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.roleHandler.ListRoles)
-				roles.GET("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.roleHandler.GetRole)
-				roles.PUT("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleUpdate), s.roleHandler.UpdateRole)
-				roles.DELETE("/:id", middleware.RequirePermission(s.roleService, domain.PermRoleDelete), s.roleHandler.DeleteRole)
-				roles.POST("/:id/permissions", middleware.RequirePermission(s.roleService, domain.PermRoleUpdate), s.roleHandler.AssignPermissions)
+				roles.POST("", middleware.RequirePermission(h.RoleService, domain.PermRoleCreate), h.Role.CreateRole)
+				roles.GET("", middleware.RequirePermission(h.RoleService, domain.PermRoleRead), h.Role.ListRoles)
+				roles.GET("/:id", middleware.RequirePermission(h.RoleService, domain.PermRoleRead), h.Role.GetRole)
+				roles.PUT("/:id", middleware.RequirePermission(h.RoleService, domain.PermRoleUpdate), h.Role.UpdateRole)
+				roles.DELETE("/:id", middleware.RequirePermission(h.RoleService, domain.PermRoleDelete), h.Role.DeleteRole)
+				roles.POST("/:id/permissions", middleware.RequirePermission(h.RoleService, domain.PermRoleUpdate), h.Role.AssignPermissions)
 			}
 
 			// Permissions Catalog
 			permissions := prot.Group("/permissions")
 			{
-				permissions.GET("", middleware.RequirePermission(s.roleService, domain.PermRoleRead), s.permissionHandler.ListPermissions)
+				permissions.GET("", middleware.RequirePermission(h.RoleService, domain.PermRoleRead), h.Permission.ListPermissions)
 			}
 
 			// Audit Logs (Strictly Tenant-Scoped)
 			auditLogs := prot.Group("/audit-logs")
 			{
-				auditLogs.GET("", middleware.RequirePermission(s.roleService, domain.PermAuditRead), s.auditHandler.ListAuditLogs)
+				auditLogs.GET("", middleware.RequirePermission(h.RoleService, domain.PermAuditRead), h.Audit.ListAuditLogs)
 			}
 		}
 	}
