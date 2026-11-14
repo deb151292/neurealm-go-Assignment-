@@ -1,0 +1,764 @@
+openapi: 3.0.3
+info:
+  title: Multi-Tenant User Management System API
+  description: |
+    Production-grade Multi-Tenant User Management System built with Go and PostgreSQL (pgxpool).
+    Features tenant isolation (shared DB with tenant_id, cross-tenant returns 404), RBAC permissions (resource:action),
+    JWT authentication with tenant-scoped access & refresh tokens, in-memory high-throughput permission caching, and immutable audit logs.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter the tenant-scoped JWT access token obtained from /api/v1/auth/login.
+
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Acme Corporation
+        code:
+          type: string
+          example: acme-corp
+        status:
+          type: string
+          enum: [active, suspended]
+          example: active
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        first_name:
+          type: string
+          example: Jane
+        last_name:
+          type: string
+          example: Doe
+        is_platform_admin:
+          type: boolean
+          example: false
+        tenant_id:
+          type: string
+          format: uuid
+        tenant_status:
+          type: string
+          enum: [active, suspended]
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Editor
+        description:
+          type: string
+          example: Editorial content manager
+        is_system:
+          type: boolean
+          example: false
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        created_at:
+          type: string
+          format: date-time
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource:
+          type: string
+          example: user
+        action:
+          type: string
+          example: create
+        description:
+          type: string
+          example: Create users in tenant
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+        actor_email:
+          type: string
+          example: admin@acme.com
+        action:
+          type: string
+          example: user:create
+        target_type:
+          type: string
+          example: user
+        target_id:
+          type: string
+          example: u0000000-0000-0000-0000-000000000002
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    AuthTokens:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: 9a7b3c2d1e...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          example: 900
+        user:
+          $ref: '#/components/schemas/User'
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["Admin"]
+        permissions:
+          type: array
+          items:
+            type: string
+          example: ["user:create", "user:read"]
+
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Operation completed successfully
+        data:
+          type: object
+
+    PaginatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 42
+            total_pages:
+              type: integer
+              example: 3
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: FORBIDDEN
+            message:
+              type: string
+              example: forbidden: insufficient permissions
+            details:
+              type: object
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns health status of server and database connection pool.
+      responses:
+        '200':
+          description: Service is healthy
+
+  /api/v1/auth/login:
+    post:
+      summary: User Login
+      description: Authenticates user using email and password. Scopes session to specified tenant_code or prompts tenant selection if user belongs to multiple tenants.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alice@multitenant.com
+                password:
+                  type: string
+                  example: Password123!
+                tenant_code:
+                  type: string
+                  example: acme-corp
+      responses:
+        '200':
+          description: Login successful or tenant selection required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Invalid email or password
+        '403':
+          description: Tenant or user suspended
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh Access Token
+      description: Exchanges a valid refresh token for a fresh access token and rotated refresh token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed successfully
+        '401':
+          description: Invalid, revoked or expired refresh token
+
+  /api/v1/auth/switch-tenant:
+    post:
+      summary: Switch Tenant
+      security:
+        - BearerAuth: []
+      description: Authenticated user switches session context to another tenant they belong to.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_code]
+              properties:
+                tenant_code:
+                  type: string
+                  example: globex
+      responses:
+        '200':
+          description: Switched tenant successfully
+
+  /api/v1/auth/me:
+    get:
+      summary: Current Profile
+      security:
+        - BearerAuth: []
+      description: Returns current authenticated user, active tenant scope, assigned roles, and effective permissions.
+      responses:
+        '200':
+          description: Profile retrieved successfully
+
+  /api/v1/auth/logout:
+    post:
+      summary: User Logout
+      security:
+        - BearerAuth: []
+      description: Revokes session refresh token and invalidates cached permissions.
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /api/v1/tenants:
+    post:
+      summary: Create Organization / Tenant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name:
+                  type: string
+                  example: Cyberdyne Systems
+                code:
+                  type: string
+                  example: cyberdyne
+                status:
+                  type: string
+                  enum: [active, suspended]
+                  default: active
+      responses:
+        '201':
+          description: Tenant created successfully
+    get:
+      summary: List Tenants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated tenants list
+
+  /api/v1/tenants/{id}:
+    get:
+      summary: Get Tenant Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tenant details
+        '404':
+          description: Tenant not found or cross-tenant access denied
+    put:
+      summary: Update Tenant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, status]
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, suspended]
+      responses:
+        '200':
+          description: Tenant updated successfully
+        '404':
+          description: Tenant not found or cross-tenant access denied
+
+  /api/v1/users:
+    post:
+      summary: Create User in Tenant
+      security:
+        - BearerAuth: []
+      description: Requires 'user:create' permission. Creates or links user to current tenant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, first_name, last_name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                role_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: User created in tenant
+        '403':
+          description: Insufficient permissions (missing user:create)
+    get:
+      summary: List Users in Tenant
+      security:
+        - BearerAuth: []
+      description: Requires 'user:read' permission. Excludes soft-deleted users.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated users list in tenant
+
+  /api/v1/users/{id}:
+    get:
+      summary: Get User in Tenant
+      security:
+        - BearerAuth: []
+      description: Requires 'user:read' permission. Returns 404 if user belongs to another tenant or is soft-deleted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+        '404':
+          description: User not found in this tenant (cross-tenant protection)
+    put:
+      summary: Update User
+      security:
+        - BearerAuth: []
+      description: Requires 'user:update' permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name]
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, suspended]
+      responses:
+        '200':
+          description: User updated
+        '404':
+          description: User not found in this tenant
+    delete:
+      summary: Soft Delete User
+      security:
+        - BearerAuth: []
+      description: Requires 'user:delete' permission. Soft deletes user from tenant.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User soft-deleted
+        '404':
+          description: User not found in this tenant
+
+  /api/v1/users/{id}/roles:
+    post:
+      summary: Assign Roles to User
+      security:
+        - BearerAuth: []
+      description: Requires 'role:assign' permission. Assigns multiple roles to user in current tenant.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_ids]
+              properties:
+                role_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Roles assigned successfully
+
+  /api/v1/roles:
+    post:
+      summary: Create Tenant-Specific Role
+      security:
+        - BearerAuth: []
+      description: Requires 'role:create' permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: BillingManager
+                description:
+                  type: string
+                  example: Manages billing and subscriptions
+                permission_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Role created successfully
+    get:
+      summary: List Tenant Roles
+      security:
+        - BearerAuth: []
+      description: Requires 'role:read' permission.
+      responses:
+        '200':
+          description: Paginated roles list
+
+  /api/v1/roles/{id}:
+    get:
+      summary: Get Role Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role details
+        '404':
+          description: Role not found in current tenant
+    put:
+      summary: Update Role
+      security:
+        - BearerAuth: []
+      description: Requires 'role:update' permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Role updated
+        '404':
+          description: Role not found in current tenant
+    delete:
+      summary: Delete Role
+      security:
+        - BearerAuth: []
+      description: Requires 'role:delete' permission. Cannot delete system roles.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role deleted
+        '400':
+          description: Cannot delete system admin role
+        '404':
+          description: Role not found in current tenant
+
+  /api/v1/roles/{id}/permissions:
+    post:
+      summary: Assign Permissions to Role
+      security:
+        - BearerAuth: []
+      description: Requires 'role:update' permission. Mappings of resource:action permissions to role.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_ids]
+              properties:
+                permission_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Permissions assigned to role
+
+  /api/v1/permissions:
+    get:
+      summary: List Available Permissions
+      security:
+        - BearerAuth: []
+      description: Requires 'role:read' permission. Lists system resource:action permissions.
+      responses:
+        '200':
+          description: Available permissions list
+
+  /api/v1/audit-logs:
+    get:
+      summary: Query Audit Logs
+      security:
+        - BearerAuth: []
+      description: Requires 'audit:read' permission. Strictly tenant-scoped audit trail (actor, action, target, metadata, timestamp).
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated audit logs
