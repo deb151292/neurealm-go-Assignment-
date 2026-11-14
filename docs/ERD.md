@@ -6,100 +6,100 @@ This document describes the normalized PostgreSQL schema powering the Multi-Tena
 
 ```mermaid
 erDiagram
-    TENANTS ||--o{ TENANT_USERS : "has members"
-    USERS ||--o{ TENANT_USERS : "belongs to"
-    TENANTS ||--o{ ROLES : "owns"
-    ROLES ||--o{ ROLE_PERMISSIONS : "contains"
-    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted by"
-    TENANTS ||--o{ USER_ROLES : "scopes"
-    USERS ||--o{ USER_ROLES : "assigned"
-    ROLES ||--o{ USER_ROLES : "assigned to"
-    TENANTS ||--o{ REFRESH_TOKENS : "scopes session"
-    USERS ||--o{ REFRESH_TOKENS : "holds"
-    TENANTS ||--o{ AUDIT_LOGS : "isolates"
-    USERS ||--o{ AUDIT_LOGS : "performed by (actor)"
+    TENANTS ||--o{ TENANT_USERS : has_members
+    USERS ||--o{ TENANT_USERS : belongs_to
+    TENANTS ||--o{ ROLES : owns
+    ROLES ||--o{ ROLE_PERMISSIONS : contains
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : granted_by
+    TENANTS ||--o{ USER_ROLES : scopes
+    USERS ||--o{ USER_ROLES : assigned
+    ROLES ||--o{ USER_ROLES : assigned_to
+    TENANTS ||--o{ REFRESH_TOKENS : scopes_session
+    USERS ||--o{ REFRESH_TOKENS : holds
+    TENANTS ||--o{ AUDIT_LOGS : isolates
+    USERS ||--o{ AUDIT_LOGS : performed_by
 
     TENANTS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        varchar name "Organization name"
-        varchar code UK "Unique slug e.g. acme-corp"
-        varchar status "active | suspended"
+        uuid id PK
+        string name
+        string code UK
+        string status
         timestamptz created_at
         timestamptz updated_at
     }
 
     USERS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        varchar email UK "Unique global email"
-        varchar password_hash "Bcrypt salted hash"
-        varchar first_name
-        varchar last_name
-        boolean is_platform_admin "Default false"
+        uuid id PK
+        string email UK
+        string password_hash
+        string first_name
+        string last_name
+        boolean is_platform_admin
         timestamptz created_at
         timestamptz updated_at
     }
 
     TENANT_USERS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        uuid tenant_id FK "REFERENCES tenants(id) ON DELETE CASCADE"
-        uuid user_id FK "REFERENCES users(id) ON DELETE CASCADE"
-        varchar status "active | suspended"
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        string status
         timestamptz created_at
         timestamptz updated_at
-        timestamptz deleted_at "Soft deletion timestamp"
+        timestamptz deleted_at
     }
 
     PERMISSIONS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        varchar resource "e.g. user, role, tenant, audit"
-        varchar action "e.g. create, read, update, delete, assign"
-        text description
+        uuid id PK
+        string resource
+        string action
+        string description
         timestamptz created_at
     }
 
     ROLES {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        uuid tenant_id FK "REFERENCES tenants(id) ON DELETE CASCADE"
-        varchar name "e.g. Admin, Editor, Viewer"
-        text description
-        boolean is_system "True for immutable default roles"
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string description
+        boolean is_system
         timestamptz created_at
         timestamptz updated_at
     }
 
     ROLE_PERMISSIONS {
-        uuid role_id PK, FK "REFERENCES roles(id) ON DELETE CASCADE"
-        uuid permission_id PK, FK "REFERENCES permissions(id) ON DELETE CASCADE"
+        uuid role_id PK,FK
+        uuid permission_id PK,FK
         timestamptz created_at
     }
 
     USER_ROLES {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        uuid tenant_id FK "REFERENCES tenants(id) ON DELETE CASCADE"
-        uuid user_id FK "REFERENCES users(id) ON DELETE CASCADE"
-        uuid role_id FK "REFERENCES roles(id) ON DELETE CASCADE"
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        uuid role_id FK
         timestamptz created_at
     }
 
     REFRESH_TOKENS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        varchar token_hash UK "SHA-256 hash of refresh token"
-        uuid user_id FK "REFERENCES users(id) ON DELETE CASCADE"
-        uuid tenant_id FK "REFERENCES tenants(id) ON DELETE CASCADE"
-        boolean revoked "Default false"
+        uuid id PK
+        string token_hash UK
+        uuid user_id FK
+        uuid tenant_id FK
+        boolean revoked
         timestamptz expires_at
         timestamptz created_at
     }
 
     AUDIT_LOGS {
-        uuid id PK "DEFAULT gen_random_uuid()"
-        uuid tenant_id FK "REFERENCES tenants(id) ON DELETE CASCADE"
-        uuid actor_id FK "REFERENCES users(id)"
-        varchar actor_email
-        varchar action "e.g. user:create, auth:login"
-        varchar target_type "e.g. user, role, tenant"
-        varchar target_id "Entity UUID"
-        jsonb metadata "IP, user agent, changes"
+        uuid id PK
+        uuid tenant_id FK
+        uuid actor_id FK
+        string actor_email
+        string action
+        string target_type
+        string target_id
+        string metadata
         timestamptz created_at
     }
 ```
