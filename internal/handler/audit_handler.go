@@ -1,22 +1,23 @@
-package audit
+package handler
 
 import (
 	"strconv"
 
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type AuditHandler struct {
+	service *service.AuditService
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewAuditHandler(service *service.AuditService) *AuditHandler {
+	return &AuditHandler{service: service}
 }
 
-func (h *Handler) ListAuditLogs(c *gin.Context) {
+func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)

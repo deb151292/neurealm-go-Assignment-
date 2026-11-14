@@ -1,12 +1,12 @@
-package user
+package service
 
 import (
 	"context"
 	"strings"
 
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -26,21 +26,21 @@ type UpdateUserRequest struct {
 	Status    string `json:"status"`
 }
 
-type Service struct {
-	repo         Repository
+type UserService struct {
+	repo         repository.UserRepository
 	cache        *cache.PermissionCache
-	auditService *audit.Service
+	auditService *AuditService
 }
 
-func NewService(repo Repository, cache *cache.PermissionCache, auditService *audit.Service) *Service {
-	return &Service{
+func NewUserService(repo repository.UserRepository, cache *cache.PermissionCache, auditService *AuditService) *UserService {
+	return &UserService{
 		repo:         repo,
 		cache:        cache,
 		auditService: auditService,
 	}
 }
 
-func (s *Service) CreateUser(ctx context.Context, tenantID uuid.UUID, req CreateUserRequest) (*domain.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, tenantID uuid.UUID, req CreateUserRequest) (*domain.User, error) {
 	v := validator.New()
 	v.Email(req.Email, "email")
 	v.MinLength(req.Password, "password", 8)
@@ -85,11 +85,11 @@ func (s *Service) CreateUser(ctx context.Context, tenantID uuid.UUID, req Create
 	return s.repo.GetByID(ctx, tenantID, user.ID)
 }
 
-func (s *Service) GetUser(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
+func (s *UserService) GetUser(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
 	return s.repo.GetByID(ctx, tenantID, userID)
 }
 
-func (s *Service) UpdateUser(ctx context.Context, tenantID, userID uuid.UUID, req UpdateUserRequest) (*domain.User, error) {
+func (s *UserService) UpdateUser(ctx context.Context, tenantID, userID uuid.UUID, req UpdateUserRequest) (*domain.User, error) {
 	v := validator.New()
 	v.RequiredString(req.FirstName, "first_name")
 	v.RequiredString(req.LastName, "last_name")
@@ -105,7 +105,6 @@ func (s *Service) UpdateUser(ctx context.Context, tenantID, userID uuid.UUID, re
 		return nil, err
 	}
 
-	// Invalidate permission cache
 	if s.cache != nil {
 		s.cache.InvalidateUser(tenantID, userID)
 	}
@@ -129,12 +128,11 @@ func (s *Service) UpdateUser(ctx context.Context, tenantID, userID uuid.UUID, re
 	return user, nil
 }
 
-func (s *Service) SoftDeleteUser(ctx context.Context, tenantID, userID uuid.UUID) error {
+func (s *UserService) SoftDeleteUser(ctx context.Context, tenantID, userID uuid.UUID) error {
 	if err := s.repo.SoftDelete(ctx, tenantID, userID); err != nil {
 		return err
 	}
 
-	// Invalidate permission cache for the user
 	if s.cache != nil {
 		s.cache.InvalidateUser(tenantID, userID)
 	}
@@ -158,7 +156,7 @@ func (s *Service) SoftDeleteUser(ctx context.Context, tenantID, userID uuid.UUID
 	return nil
 }
 
-func (s *Service) ListUsers(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.User, int64, error) {
+func (s *UserService) ListUsers(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.User, int64, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -168,6 +166,6 @@ func (s *Service) ListUsers(ctx context.Context, tenantID uuid.UUID, params doma
 	return s.repo.ListByTenant(ctx, tenantID, params)
 }
 
-func (s *Service) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error) {
+func (s *UserService) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error) {
 	return s.repo.GetUserTenants(ctx, userID)
 }

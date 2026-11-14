@@ -1,11 +1,11 @@
-package tenant
+package service
 
 import (
 	"context"
 	"strings"
 
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,21 +22,21 @@ type UpdateTenantRequest struct {
 	Status string `json:"status"`
 }
 
-type Service struct {
-	repo         Repository
+type TenantService struct {
+	repo         repository.TenantRepository
 	pool         *pgxpool.Pool
-	auditService *audit.Service
+	auditService *AuditService
 }
 
-func NewService(repo Repository, pool *pgxpool.Pool, auditService *audit.Service) *Service {
-	return &Service{
+func NewTenantService(repo repository.TenantRepository, pool *pgxpool.Pool, auditService *AuditService) *TenantService {
+	return &TenantService{
 		repo:         repo,
 		pool:         pool,
 		auditService: auditService,
 	}
 }
 
-func (s *Service) CreateTenant(ctx context.Context, req CreateTenantRequest) (*domain.Tenant, error) {
+func (s *TenantService) CreateTenant(ctx context.Context, req CreateTenantRequest) (*domain.Tenant, error) {
 	v := validator.New()
 	v.RequiredString(req.Name, "name")
 	v.TenantCode(req.Code, "code")
@@ -59,12 +59,10 @@ func (s *Service) CreateTenant(ctx context.Context, req CreateTenantRequest) (*d
 		return nil, err
 	}
 
-	// Bootstrap default system roles for the tenant (Admin and Member)
 	if s.pool != nil {
 		s.bootstrapTenantRoles(ctx, t.ID)
 	}
 
-	// Record audit event
 	actorID, _ := domain.GetUserID(ctx)
 	actorEmail := domain.GetUserEmail(ctx)
 	if s.auditService != nil {
@@ -85,15 +83,15 @@ func (s *Service) CreateTenant(ctx context.Context, req CreateTenantRequest) (*d
 	return t, nil
 }
 
-func (s *Service) GetTenant(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+func (s *TenantService) GetTenant(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *Service) GetTenantByCode(ctx context.Context, code string) (*domain.Tenant, error) {
+func (s *TenantService) GetTenantByCode(ctx context.Context, code string) (*domain.Tenant, error) {
 	return s.repo.GetByCode(ctx, strings.ToLower(strings.TrimSpace(code)))
 }
 
-func (s *Service) UpdateTenant(ctx context.Context, id uuid.UUID, req UpdateTenantRequest) (*domain.Tenant, error) {
+func (s *TenantService) UpdateTenant(ctx context.Context, id uuid.UUID, req UpdateTenantRequest) (*domain.Tenant, error) {
 	v := validator.New()
 	v.RequiredString(req.Name, "name")
 	v.In(req.Status, "status", domain.TenantStatusActive, domain.TenantStatusSuspended)
@@ -133,7 +131,7 @@ func (s *Service) UpdateTenant(ctx context.Context, id uuid.UUID, req UpdateTena
 	return t, nil
 }
 
-func (s *Service) ListTenants(ctx context.Context, params domain.PaginationParams) ([]domain.Tenant, int64, error) {
+func (s *TenantService) ListTenants(ctx context.Context, params domain.PaginationParams) ([]domain.Tenant, int64, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -143,11 +141,10 @@ func (s *Service) ListTenants(ctx context.Context, params domain.PaginationParam
 	return s.repo.List(ctx, params)
 }
 
-func (s *Service) bootstrapTenantRoles(ctx context.Context, tenantID uuid.UUID) {
+func (s *TenantService) bootstrapTenantRoles(ctx context.Context, tenantID uuid.UUID) {
 	if s.pool == nil {
 		return
 	}
-	// Create Admin role and assign all system permissions
 	var adminRoleID uuid.UUID
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO roles (tenant_id, name, description, is_system)
@@ -163,7 +160,6 @@ func (s *Service) bootstrapTenantRoles(ctx context.Context, tenantID uuid.UUID) 
 		`, adminRoleID)
 	}
 
-	// Create Member role with read permissions
 	var memberRoleID uuid.UUID
 	err = s.pool.QueryRow(ctx, `
 		INSERT INTO roles (tenant_id, name, description, is_system)

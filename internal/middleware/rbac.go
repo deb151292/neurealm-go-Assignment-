@@ -6,12 +6,12 @@ import (
 
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 // RequirePermission verifies the user has the required resource:action permission
-func RequirePermission(roleService *role.Service, requiredPermission string) gin.HandlerFunc {
+func RequirePermission(roleService *service.RoleService, requiredPermission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 

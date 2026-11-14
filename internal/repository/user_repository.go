@@ -1,4 +1,4 @@
-package user
+package repository
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type UserRepository interface {
 	CreateUserInTenant(ctx context.Context, tenantID uuid.UUID, user *domain.User, roleIDs []uuid.UUID) error
 	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
@@ -24,22 +24,21 @@ type Repository interface {
 	GetTenantUserMembership(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantUser, error)
 }
 
-type pgxRepository struct {
+type pgxUserRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewUserRepository(pool *pgxpool.Pool) UserRepository {
+	return &pgxUserRepository{pool: pool}
 }
 
-func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UUID, user *domain.User, roleIDs []uuid.UUID) error {
+func (r *pgxUserRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UUID, user *domain.User, roleIDs []uuid.UUID) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// 1. Check if user with email already exists globally
 	var existingID uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, user.Email).Scan(&existingID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -47,7 +46,6 @@ func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UU
 	}
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Insert new global user
 		queryUser := `
 			INSERT INTO users (email, password_hash, first_name, last_name, is_platform_admin, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
@@ -59,17 +57,14 @@ func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UU
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 	} else {
-		// Existing user found
 		user.ID = existingID
-		// Check if already an active member of this tenant
 		var isMember bool
 		var deletedAt *time.Time
 		err = tx.QueryRow(ctx, `SELECT TRUE, deleted_at FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, tenantID, user.ID).Scan(&isMember, &deletedAt)
 		if err == nil {
 			if deletedAt == nil {
-				return domain.ErrConflict // User already exists in this tenant
+				return domain.ErrConflict
 			}
-			// Re-activate soft-deleted user membership
 			_, err = tx.Exec(ctx, `UPDATE tenant_users SET deleted_at = NULL, status = 'active', updated_at = NOW() WHERE tenant_id = $1 AND user_id = $2`, tenantID, user.ID)
 			if err != nil {
 				return fmt.Errorf("failed to reactivate tenant user: %w", err)
@@ -77,7 +72,6 @@ func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UU
 		}
 	}
 
-	// 2. Link user to tenant in tenant_users
 	queryTenantUser := `
 		INSERT INTO tenant_users (tenant_id, user_id, status, created_at, updated_at)
 		VALUES ($1, $2, 'active', NOW(), NOW())
@@ -87,7 +81,6 @@ func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UU
 		return fmt.Errorf("failed to link user to tenant: %w", err)
 	}
 
-	// 3. Assign initial roles
 	if len(roleIDs) > 0 {
 		for _, rid := range roleIDs {
 			_, err = tx.Exec(ctx, `
@@ -111,8 +104,7 @@ func (r *pgxRepository) CreateUserInTenant(ctx context.Context, tenantID uuid.UU
 	return nil
 }
 
-func (r *pgxRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
-	// Strictly enforces tenant isolation: cross-tenant access returns ErrNotFound (404)
+func (r *pgxUserRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
 	query := `
 		SELECT u.id, u.email, u.first_name, u.last_name, u.is_platform_admin, u.created_at, u.updated_at,
 		       tu.tenant_id, tu.status, tu.deleted_at
@@ -148,7 +140,6 @@ func (r *pgxRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID)
 	user.TenantStatus = &status
 	user.DeletedAt = deletedAt
 
-	// Populate tenant roles
 	roles, err := r.GetUserRolesInTenant(ctx, tenantID, user.ID)
 	if err == nil {
 		user.Roles = roles
@@ -157,7 +148,7 @@ func (r *pgxRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID)
 	return &user, nil
 }
 
-func (r *pgxRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (r *pgxUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, first_name, last_name, is_platform_admin, created_at, updated_at
 		FROM users
@@ -183,28 +174,24 @@ func (r *pgxRepository) GetByEmail(ctx context.Context, email string) (*domain.U
 	return &user, nil
 }
 
-func (r *pgxRepository) Update(ctx context.Context, tenantID, userID uuid.UUID, firstName, lastName, status string) (*domain.User, error) {
-	// Strictly enforces tenant isolation: cross-tenant access returns ErrNotFound (404)
+func (r *pgxUserRepository) Update(ctx context.Context, tenantID, userID uuid.UUID, firstName, lastName, status string) (*domain.User, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Verify membership in this tenant
 	var exists bool
 	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tenant_users WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL)`, tenantID, userID).Scan(&exists)
 	if err != nil || !exists {
 		return nil, domain.ErrNotFound
 	}
 
-	// Update user details
 	_, err = tx.Exec(ctx, `UPDATE users SET first_name = $1, last_name = $2, updated_at = NOW() WHERE id = $3`, firstName, lastName, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user names: %w", err)
 	}
 
-	// Update tenant membership status if provided
 	if status != "" {
 		_, err = tx.Exec(ctx, `UPDATE tenant_users SET status = $1, updated_at = NOW() WHERE tenant_id = $2 AND user_id = $3`, status, tenantID, userID)
 		if err != nil {
@@ -219,8 +206,7 @@ func (r *pgxRepository) Update(ctx context.Context, tenantID, userID uuid.UUID, 
 	return r.GetByID(ctx, tenantID, userID)
 }
 
-func (r *pgxRepository) SoftDelete(ctx context.Context, tenantID, userID uuid.UUID) error {
-	// Soft delete from tenant_users table: cross-tenant access returns ErrNotFound (404)
+func (r *pgxUserRepository) SoftDelete(ctx context.Context, tenantID, userID uuid.UUID) error {
 	query := `
 		UPDATE tenant_users
 		SET deleted_at = NOW(), status = 'suspended', updated_at = NOW()
@@ -237,7 +223,7 @@ func (r *pgxRepository) SoftDelete(ctx context.Context, tenantID, userID uuid.UU
 	return nil
 }
 
-func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.User, int64, error) {
+func (r *pgxUserRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.User, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM users u
@@ -295,7 +281,6 @@ func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, pa
 		users = append(users, u)
 	}
 
-	// Populate roles for each user
 	for i := range users {
 		roles, err := r.GetUserRolesInTenant(ctx, tenantID, users[i].ID)
 		if err == nil {
@@ -306,7 +291,7 @@ func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, pa
 	return users, total, nil
 }
 
-func (r *pgxRepository) GetUserRolesInTenant(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
+func (r *pgxUserRepository) GetUserRolesInTenant(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
 	query := `
 		SELECT r.id, r.tenant_id, r.name, r.description, r.is_system, r.created_at, r.updated_at
 		FROM roles r
@@ -331,7 +316,7 @@ func (r *pgxRepository) GetUserRolesInTenant(ctx context.Context, tenantID, user
 	return roles, nil
 }
 
-func (r *pgxRepository) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error) {
+func (r *pgxUserRepository) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error) {
 	query := `
 		SELECT t.id, t.name, t.code, t.status, t.created_at, t.updated_at
 		FROM tenants t
@@ -356,7 +341,7 @@ func (r *pgxRepository) GetUserTenants(ctx context.Context, userID uuid.UUID) ([
 	return tenants, nil
 }
 
-func (r *pgxRepository) GetTenantUserMembership(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantUser, error) {
+func (r *pgxUserRepository) GetTenantUserMembership(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantUser, error) {
 	query := `
 		SELECT id, tenant_id, user_id, status, created_at, updated_at, deleted_at
 		FROM tenant_users

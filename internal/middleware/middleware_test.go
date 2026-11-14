@@ -11,7 +11,7 @@ import (
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -106,7 +106,7 @@ func TestRBACMiddleware_403Forbidden(t *testing.T) {
 
 	permCache.Set(tenantID, userID, []string{"user:read"})
 
-	roleSvc := role.NewService(nil, permCache, nil)
+	roleSvc := service.NewRoleService(nil, permCache, nil)
 	r := gin.New()
 	r.POST("/api/v1/users", middleware.RequirePermission(roleSvc, "user:create"), func(c *gin.Context) {
 		c.Status(http.StatusOK)
@@ -141,7 +141,7 @@ func TestRBACMiddleware_200Success(t *testing.T) {
 
 	permCache.Set(tenantID, userID, []string{"user:create", "user:read"})
 
-	roleSvc := role.NewService(nil, permCache, nil)
+	roleSvc := service.NewRoleService(nil, permCache, nil)
 	r := gin.New()
 	r.POST("/api/v1/users", middleware.RequirePermission(roleSvc, "user:create"), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": true})

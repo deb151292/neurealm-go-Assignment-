@@ -1,4 +1,4 @@
-package tenant
+package repository
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type TenantRepository interface {
 	Create(ctx context.Context, t *domain.Tenant) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error)
 	GetByCode(ctx context.Context, code string) (*domain.Tenant, error)
@@ -20,15 +20,15 @@ type Repository interface {
 	List(ctx context.Context, params domain.PaginationParams) ([]domain.Tenant, int64, error)
 }
 
-type pgxRepository struct {
+type pgxTenantRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewTenantRepository(pool *pgxpool.Pool) TenantRepository {
+	return &pgxTenantRepository{pool: pool}
 }
 
-func (r *pgxRepository) Create(ctx context.Context, t *domain.Tenant) error {
+func (r *pgxTenantRepository) Create(ctx context.Context, t *domain.Tenant) error {
 	query := `
 		INSERT INTO tenants (name, code, status, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
@@ -45,7 +45,7 @@ func (r *pgxRepository) Create(ctx context.Context, t *domain.Tenant) error {
 	return nil
 }
 
-func (r *pgxRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+func (r *pgxTenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
 	query := `
 		SELECT id, name, code, status, created_at, updated_at
 		FROM tenants
@@ -62,7 +62,7 @@ func (r *pgxRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tena
 	return &t, nil
 }
 
-func (r *pgxRepository) GetByCode(ctx context.Context, code string) (*domain.Tenant, error) {
+func (r *pgxTenantRepository) GetByCode(ctx context.Context, code string) (*domain.Tenant, error) {
 	query := `
 		SELECT id, name, code, status, created_at, updated_at
 		FROM tenants
@@ -79,7 +79,7 @@ func (r *pgxRepository) GetByCode(ctx context.Context, code string) (*domain.Ten
 	return &t, nil
 }
 
-func (r *pgxRepository) Update(ctx context.Context, t *domain.Tenant) error {
+func (r *pgxTenantRepository) Update(ctx context.Context, t *domain.Tenant) error {
 	query := `
 		UPDATE tenants
 		SET name = $1, status = $2, updated_at = NOW()
@@ -96,7 +96,7 @@ func (r *pgxRepository) Update(ctx context.Context, t *domain.Tenant) error {
 	return nil
 }
 
-func (r *pgxRepository) List(ctx context.Context, params domain.PaginationParams) ([]domain.Tenant, int64, error) {
+func (r *pgxTenantRepository) List(ctx context.Context, params domain.PaginationParams) ([]domain.Tenant, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM tenants

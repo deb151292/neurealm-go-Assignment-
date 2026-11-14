@@ -1,12 +1,12 @@
-package role
+package service
 
 import (
 	"context"
 	"strings"
 
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
 )
@@ -30,21 +30,21 @@ type AssignUserRolesRequest struct {
 	RoleIDs []uuid.UUID `json:"role_ids"`
 }
 
-type Service struct {
-	repo         Repository
+type RoleService struct {
+	repo         repository.RoleRepository
 	cache        *cache.PermissionCache
-	auditService *audit.Service
+	auditService *AuditService
 }
 
-func NewService(repo Repository, cache *cache.PermissionCache, auditService *audit.Service) *Service {
-	return &Service{
+func NewRoleService(repo repository.RoleRepository, cache *cache.PermissionCache, auditService *AuditService) *RoleService {
+	return &RoleService{
 		repo:         repo,
 		cache:        cache,
 		auditService: auditService,
 	}
 }
 
-func (s *Service) CreateRole(ctx context.Context, tenantID uuid.UUID, req CreateRoleRequest) (*domain.Role, error) {
+func (s *RoleService) CreateRole(ctx context.Context, tenantID uuid.UUID, req CreateRoleRequest) (*domain.Role, error) {
 	v := validator.New()
 	v.RequiredString(req.Name, "name")
 	if !v.Valid() {
@@ -88,11 +88,11 @@ func (s *Service) CreateRole(ctx context.Context, tenantID uuid.UUID, req Create
 	return role, nil
 }
 
-func (s *Service) GetRole(ctx context.Context, tenantID, roleID uuid.UUID) (*domain.Role, error) {
+func (s *RoleService) GetRole(ctx context.Context, tenantID, roleID uuid.UUID) (*domain.Role, error) {
 	return s.repo.GetByID(ctx, tenantID, roleID)
 }
 
-func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.Role, int64, error) {
+func (s *RoleService) ListRoles(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.Role, int64, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -102,7 +102,7 @@ func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID, params doma
 	return s.repo.ListByTenant(ctx, tenantID, params)
 }
 
-func (s *Service) UpdateRole(ctx context.Context, tenantID, roleID uuid.UUID, req UpdateRoleRequest) (*domain.Role, error) {
+func (s *RoleService) UpdateRole(ctx context.Context, tenantID, roleID uuid.UUID, req UpdateRoleRequest) (*domain.Role, error) {
 	v := validator.New()
 	v.RequiredString(req.Name, "name")
 	if !v.Valid() {
@@ -133,12 +133,11 @@ func (s *Service) UpdateRole(ctx context.Context, tenantID, roleID uuid.UUID, re
 	return role, nil
 }
 
-func (s *Service) DeleteRole(ctx context.Context, tenantID, roleID uuid.UUID) error {
+func (s *RoleService) DeleteRole(ctx context.Context, tenantID, roleID uuid.UUID) error {
 	if err := s.repo.Delete(ctx, tenantID, roleID); err != nil {
 		return err
 	}
 
-	// Invalidate cached permissions for the tenant since role was removed
 	if s.cache != nil {
 		s.cache.InvalidateTenant(tenantID)
 	}
@@ -160,12 +159,11 @@ func (s *Service) DeleteRole(ctx context.Context, tenantID, roleID uuid.UUID) er
 	return nil
 }
 
-func (s *Service) AssignPermissions(ctx context.Context, tenantID, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
+func (s *RoleService) AssignPermissions(ctx context.Context, tenantID, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
 	if err := s.repo.AssignPermissions(ctx, tenantID, roleID, permissionIDs); err != nil {
 		return err
 	}
 
-	// Invalidate cached permissions for all users in the tenant
 	if s.cache != nil {
 		s.cache.InvalidateTenant(tenantID)
 	}
@@ -189,12 +187,11 @@ func (s *Service) AssignPermissions(ctx context.Context, tenantID, roleID uuid.U
 	return nil
 }
 
-func (s *Service) AssignUserRoles(ctx context.Context, tenantID, userID uuid.UUID, roleIDs []uuid.UUID) error {
+func (s *RoleService) AssignUserRoles(ctx context.Context, tenantID, userID uuid.UUID, roleIDs []uuid.UUID) error {
 	if err := s.repo.AssignUserRoles(ctx, tenantID, userID, roleIDs); err != nil {
 		return err
 	}
 
-	// Invalidate cached permissions specifically for this user
 	if s.cache != nil {
 		s.cache.InvalidateUser(tenantID, userID)
 	}
@@ -218,8 +215,7 @@ func (s *Service) AssignUserRoles(ctx context.Context, tenantID, userID uuid.UUI
 	return nil
 }
 
-func (s *Service) GetUserPermissions(ctx context.Context, tenantID, userID uuid.UUID) ([]string, error) {
-	// High volume fast path: check in-memory cache
+func (s *RoleService) GetUserPermissions(ctx context.Context, tenantID, userID uuid.UUID) ([]string, error) {
 	if s.cache != nil {
 		if perms, found := s.cache.Get(tenantID, userID); found {
 			list := make([]string, 0, len(perms))
@@ -234,19 +230,17 @@ func (s *Service) GetUserPermissions(ctx context.Context, tenantID, userID uuid.
 		return nil, nil
 	}
 
-	// Cache miss: query repository
 	perms, err := s.repo.GetUserPermissions(ctx, tenantID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate cache
 	if s.cache != nil {
 		s.cache.Set(tenantID, userID, perms)
 	}
 	return perms, nil
 }
 
-func (s *Service) GetUserRoles(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
+func (s *RoleService) GetUserRoles(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
 	return s.repo.GetUserRoles(ctx, tenantID, userID)
 }

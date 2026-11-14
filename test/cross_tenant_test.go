@@ -10,15 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/handler"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/permission"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -50,19 +47,19 @@ func setupTestEnv(t *testing.T) *TestEnv {
 	permCache := cache.NewPermissionCache(5*time.Minute, 10*time.Minute)
 	jwtSvc := auth.NewJWTService("integration-test-secret-32-bytes-long!", 15*time.Minute, 24*time.Hour)
 
-	auditSvc := audit.NewService(store.AuditRepo())
-	tenantSvc := tenant.NewService(store.TenantRepo(), nil, auditSvc)
-	roleSvc := role.NewService(store.RoleRepo(), permCache, auditSvc)
-	userSvc := user.NewService(store.UserRepo(), permCache, auditSvc)
-	permSvc := permission.NewService(store.PermRepo())
-	authSvc := auth.NewService(store.AuthRepo(), store.UserRepo(), store.TenantRepo(), store.RoleRepo(), jwtSvc, permCache, auditSvc)
+	auditSvc := service.NewAuditService(store.AuditRepo())
+	tenantSvc := service.NewTenantService(store.TenantRepo(), nil, auditSvc)
+	roleSvc := service.NewRoleService(store.RoleRepo(), permCache, auditSvc)
+	userSvc := service.NewUserService(store.UserRepo(), permCache, auditSvc)
+	permSvc := service.NewPermissionService(store.PermRepo())
+	authSvc := service.NewAuthService(store.AuthRepo(), store.UserRepo(), store.TenantRepo(), store.RoleRepo(), jwtSvc, permCache, auditSvc)
 
-	tenantH := tenant.NewHandler(tenantSvc)
-	userH := user.NewHandler(userSvc, roleSvc)
-	roleH := role.NewHandler(roleSvc)
-	permH := permission.NewHandler(permSvc)
-	auditH := audit.NewHandler(auditSvc)
-	authH := auth.NewHandler(authSvc, userSvc, store.TenantRepo(), roleSvc)
+	tenantH := handler.NewTenantHandler(tenantSvc)
+	userH := handler.NewUserHandler(userSvc, roleSvc)
+	roleH := handler.NewRoleHandler(roleSvc)
+	permH := handler.NewPermissionHandler(permSvc)
+	auditH := handler.NewAuditHandler(auditSvc)
+	authH := handler.NewAuthHandler(authSvc, userSvc, store.TenantRepo(), roleSvc)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
@@ -407,7 +404,7 @@ func TestUser_SoftDelete_ExcludesFromQuery(t *testing.T) {
 func TestMultiTenant_LoginAndSwitchTenant(t *testing.T) {
 	env := setupTestEnv(t)
 
-	loginReq := auth.LoginRequest{
+	loginReq := service.LoginRequest{
 		Email:      "alice@multi.com",
 		Password:   "Password123!",
 		TenantCode: "acme-corp",
@@ -427,7 +424,7 @@ func TestMultiTenant_LoginAndSwitchTenant(t *testing.T) {
 	data := res["data"].(map[string]interface{})
 	tokenA := data["access_token"].(string)
 
-	switchReq := auth.SwitchTenantRequest{TenantCode: "globex"}
+	switchReq := service.SwitchTenantRequest{TenantCode: "globex"}
 	switchBody, _ := json.Marshal(switchReq)
 	reqSwitch := httptest.NewRequest("POST", "/api/v1/auth/switch-tenant", bytes.NewReader(switchBody))
 	reqSwitch.Header.Set("Authorization", "Bearer "+tokenA)

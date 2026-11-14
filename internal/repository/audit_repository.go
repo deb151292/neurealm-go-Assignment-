@@ -1,4 +1,4 @@
-package audit
+package repository
 
 import (
 	"context"
@@ -10,20 +10,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type AuditRepository interface {
 	Create(ctx context.Context, log *domain.AuditLog) error
 	ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.AuditLog, int64, error)
 }
 
-type pgxRepository struct {
+type pgxAuditRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewAuditRepository(pool *pgxpool.Pool) AuditRepository {
+	return &pgxAuditRepository{pool: pool}
 }
 
-func (r *pgxRepository) Create(ctx context.Context, log *domain.AuditLog) error {
+func (r *pgxAuditRepository) Create(ctx context.Context, log *domain.AuditLog) error {
 	metaJSON, err := json.Marshal(log.Metadata)
 	if err != nil {
 		metaJSON = []byte("{}")
@@ -45,7 +45,7 @@ func (r *pgxRepository) Create(ctx context.Context, log *domain.AuditLog) error 
 	).Scan(&log.ID, &log.CreatedAt)
 }
 
-func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.AuditLog, int64, error) {
+func (r *pgxAuditRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.AuditLog, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM audit_logs

@@ -1,4 +1,4 @@
-package role
+package repository
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type RoleRepository interface {
 	Create(ctx context.Context, role *domain.Role) error
 	GetByID(ctx context.Context, tenantID, roleID uuid.UUID) (*domain.Role, error)
 	ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.Role, int64, error)
@@ -25,15 +25,15 @@ type Repository interface {
 	GetUserPermissions(ctx context.Context, tenantID, userID uuid.UUID) ([]string, error)
 }
 
-type pgxRepository struct {
+type pgxRoleRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewRoleRepository(pool *pgxpool.Pool) RoleRepository {
+	return &pgxRoleRepository{pool: pool}
 }
 
-func (r *pgxRepository) Create(ctx context.Context, role *domain.Role) error {
+func (r *pgxRoleRepository) Create(ctx context.Context, role *domain.Role) error {
 	query := `
 		INSERT INTO roles (tenant_id, name, description, is_system, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -51,8 +51,7 @@ func (r *pgxRepository) Create(ctx context.Context, role *domain.Role) error {
 	return nil
 }
 
-func (r *pgxRepository) GetByID(ctx context.Context, tenantID, roleID uuid.UUID) (*domain.Role, error) {
-	// Strictly enforces tenant isolation: cross-tenant access returns ErrNotFound (404)
+func (r *pgxRoleRepository) GetByID(ctx context.Context, tenantID, roleID uuid.UUID) (*domain.Role, error) {
 	query := `
 		SELECT id, tenant_id, name, description, is_system, created_at, updated_at
 		FROM roles
@@ -68,7 +67,6 @@ func (r *pgxRepository) GetByID(ctx context.Context, tenantID, roleID uuid.UUID)
 		return nil, fmt.Errorf("failed to get role: %w", err)
 	}
 
-	// Fetch permissions
 	perms, err := r.GetRolePermissions(ctx, role.ID)
 	if err != nil {
 		return nil, err
@@ -78,7 +76,7 @@ func (r *pgxRepository) GetByID(ctx context.Context, tenantID, roleID uuid.UUID)
 	return &role, nil
 }
 
-func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.Role, int64, error) {
+func (r *pgxRoleRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, params domain.PaginationParams) ([]domain.Role, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM roles
@@ -114,7 +112,6 @@ func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, pa
 		roles = append(roles, role)
 	}
 
-	// Populate permissions for each role
 	for i := range roles {
 		perms, err := r.GetRolePermissions(ctx, roles[i].ID)
 		if err == nil {
@@ -125,8 +122,7 @@ func (r *pgxRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, pa
 	return roles, total, nil
 }
 
-func (r *pgxRepository) Update(ctx context.Context, tenantID, roleID uuid.UUID, name, description string) (*domain.Role, error) {
-	// Strictly enforces tenant isolation: cross-tenant access returns ErrNotFound (404)
+func (r *pgxRoleRepository) Update(ctx context.Context, tenantID, roleID uuid.UUID, name, description string) (*domain.Role, error) {
 	query := `
 		UPDATE roles
 		SET name = $1, description = $2, updated_at = NOW()
@@ -152,8 +148,7 @@ func (r *pgxRepository) Update(ctx context.Context, tenantID, roleID uuid.UUID, 
 	return &role, nil
 }
 
-func (r *pgxRepository) Delete(ctx context.Context, tenantID, roleID uuid.UUID) error {
-	// Check if role is system role
+func (r *pgxRoleRepository) Delete(ctx context.Context, tenantID, roleID uuid.UUID) error {
 	var isSystem bool
 	err := r.pool.QueryRow(ctx, `SELECT is_system FROM roles WHERE id = $1 AND tenant_id = $2`, roleID, tenantID).Scan(&isSystem)
 	if err != nil {
@@ -177,8 +172,7 @@ func (r *pgxRepository) Delete(ctx context.Context, tenantID, roleID uuid.UUID) 
 	return nil
 }
 
-func (r *pgxRepository) AssignPermissions(ctx context.Context, tenantID, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
-	// Verify role belongs to tenant
+func (r *pgxRoleRepository) AssignPermissions(ctx context.Context, tenantID, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
 	var exists bool
 	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM roles WHERE id = $1 AND tenant_id = $2)`, roleID, tenantID).Scan(&exists)
 	if err != nil || !exists {
@@ -191,13 +185,11 @@ func (r *pgxRepository) AssignPermissions(ctx context.Context, tenantID, roleID 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Clear existing permissions for this role
 	_, err = tx.Exec(ctx, `DELETE FROM role_permissions WHERE role_id = $1`, roleID)
 	if err != nil {
 		return fmt.Errorf("failed to clear existing permissions: %w", err)
 	}
 
-	// Insert new permissions
 	insertQuery := `INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 	for _, pid := range permissionIDs {
 		_, err = tx.Exec(ctx, insertQuery, roleID, pid)
@@ -209,7 +201,7 @@ func (r *pgxRepository) AssignPermissions(ctx context.Context, tenantID, roleID 
 	return tx.Commit(ctx)
 }
 
-func (r *pgxRepository) GetRolePermissions(ctx context.Context, roleID uuid.UUID) ([]domain.Permission, error) {
+func (r *pgxRoleRepository) GetRolePermissions(ctx context.Context, roleID uuid.UUID) ([]domain.Permission, error) {
 	query := `
 		SELECT p.id, p.resource, p.action, p.description, p.created_at
 		FROM permissions p
@@ -234,15 +226,13 @@ func (r *pgxRepository) GetRolePermissions(ctx context.Context, roleID uuid.UUID
 	return perms, nil
 }
 
-func (r *pgxRepository) AssignUserRoles(ctx context.Context, tenantID, userID uuid.UUID, roleIDs []uuid.UUID) error {
-	// Verify tenant membership
+func (r *pgxRoleRepository) AssignUserRoles(ctx context.Context, tenantID, userID uuid.UUID, roleIDs []uuid.UUID) error {
 	var isMember bool
 	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tenant_users WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL)`, tenantID, userID).Scan(&isMember)
 	if err != nil || !isMember {
 		return domain.ErrNotFound
 	}
 
-	// Verify all roles belong to this tenant
 	if len(roleIDs) > 0 {
 		var count int
 		err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM roles WHERE tenant_id = $1 AND id = ANY($2)`, tenantID, roleIDs).Scan(&count)
@@ -257,13 +247,11 @@ func (r *pgxRepository) AssignUserRoles(ctx context.Context, tenantID, userID uu
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Clear existing roles for user in this tenant
 	_, err = tx.Exec(ctx, `DELETE FROM user_roles WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to clear user roles: %w", err)
 	}
 
-	// Insert new assignments
 	insertQuery := `INSERT INTO user_roles (tenant_id, user_id, role_id, created_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT DO NOTHING`
 	for _, rid := range roleIDs {
 		_, err = tx.Exec(ctx, insertQuery, tenantID, userID, rid)
@@ -275,7 +263,7 @@ func (r *pgxRepository) AssignUserRoles(ctx context.Context, tenantID, userID uu
 	return tx.Commit(ctx)
 }
 
-func (r *pgxRepository) GetUserRoles(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
+func (r *pgxRoleRepository) GetUserRoles(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.Role, error) {
 	query := `
 		SELECT r.id, r.tenant_id, r.name, r.description, r.is_system, r.created_at, r.updated_at
 		FROM roles r
@@ -300,7 +288,7 @@ func (r *pgxRepository) GetUserRoles(ctx context.Context, tenantID, userID uuid.
 	return roles, nil
 }
 
-func (r *pgxRepository) GetUserPermissions(ctx context.Context, tenantID, userID uuid.UUID) ([]string, error) {
+func (r *pgxRoleRepository) GetUserPermissions(ctx context.Context, tenantID, userID uuid.UUID) ([]string, error) {
 	query := `
 		SELECT DISTINCT p.resource || ':' || p.action
 		FROM permissions p

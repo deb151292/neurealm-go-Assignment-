@@ -34,20 +34,18 @@ The codebase follows the Clean Architecture pattern (`Handler -> Service -> Repo
 │       ├── 20261114000001_init_schema.sql  # Normalized PostgreSQL schema & composite indexes
 │       └── 20261114000002_seed_data.sql    # Deterministic demo seed data (Up/Down)
 ├── internal/
-│   ├── config/config.go          # Environment configuration loading (.env)
-│   ├── domain/                   # Entities, domain errors, and context keys
+│   ├── handler/                  # HTTP route handlers (Auth, Tenant, User, Role, Perm, Audit)
+│   ├── service/                  # Business logic services (Auth, Tenant, User, Role, Perm, Audit)
+│   ├── repository/               # pgxpool database repositories & interfaces
+│   ├── domain/                   # Core entities, domain errors, and context keys
+│   ├── auth/                     # JWT tokens & claims generation/validation
 │   ├── database/                 # pgxpool connection pool and Goose migration runner
 │   ├── cache/                    # Thread-safe in-memory permission cache with TTL
 │   ├── middleware/               # Auth, TenantIsolation, RBAC, RequestLogger, Recoverer
 │   ├── response/                 # Standard JSON response envelope & error mapper
 │   ├── validator/                # Request input validation
-│   ├── auth/                     # JWT tokens, session refresh, tenant switching
-│   ├── tenant/                   # Organization & tenant lifecycle
-│   ├── user/                     # User management & multi-tenant membership
-│   ├── role/                     # Tenant-specific roles and permission assignments
-│   ├── permission/               # System permission catalog
-│   ├── audit/                    # Tenant-scoped security audit trail
-│   └── server/                   # Gin engine setup and route bindings
+│   ├── config/                   # Environment configuration loading (.env)
+│   └── server/                   # Gin engine setup, route bindings, CORS, health check
 ├── test/
 │   ├── mock_store.go             # Mock repository store for testing
 │   └── cross_tenant_test.go      # End-to-end integration & cross-tenant 404 tests

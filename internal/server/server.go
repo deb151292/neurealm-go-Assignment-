@@ -6,17 +6,15 @@ import (
 	"time"
 
 	"github.com/deb151292/neurealm-go-Assignment-/docs"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/config"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/handler"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/permission"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -29,16 +27,16 @@ type Server struct {
 	jwtService *auth.JWTService
 
 	// Handlers
-	authHandler       *auth.Handler
-	tenantHandler     *tenant.Handler
-	userHandler       *user.Handler
-	roleHandler       *role.Handler
-	permissionHandler *permission.Handler
-	auditHandler      *audit.Handler
+	authHandler       *handler.AuthHandler
+	tenantHandler     *handler.TenantHandler
+	userHandler       *handler.UserHandler
+	roleHandler       *handler.RoleHandler
+	permissionHandler *handler.PermissionHandler
+	auditHandler      *handler.AuditHandler
 
 	// Services
-	roleService *role.Service
-	userService *user.Service
+	roleService *service.RoleService
+	userService *service.UserService
 }
 
 func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
@@ -51,28 +49,28 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool) *Server {
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 
 	// 2. Repositories
-	auditRepo := audit.NewRepository(pool)
-	tenantRepo := tenant.NewRepository(pool)
-	roleRepo := role.NewRepository(pool)
-	userRepo := user.NewRepository(pool)
-	authRepo := auth.NewRepository(pool)
-	permRepo := permission.NewRepository(pool)
+	auditRepo := repository.NewAuditRepository(pool)
+	tenantRepo := repository.NewTenantRepository(pool)
+	roleRepo := repository.NewRoleRepository(pool)
+	userRepo := repository.NewUserRepository(pool)
+	authRepo := repository.NewAuthRepository(pool)
+	permRepo := repository.NewPermissionRepository(pool)
 
 	// 3. Domain Services
-	auditSvc := audit.NewService(auditRepo)
-	tenantSvc := tenant.NewService(tenantRepo, pool, auditSvc)
-	roleSvc := role.NewService(roleRepo, permCache, auditSvc)
-	userSvc := user.NewService(userRepo, permCache, auditSvc)
-	permSvc := permission.NewService(permRepo)
-	authSvc := auth.NewService(authRepo, userRepo, tenantRepo, roleRepo, jwtSvc, permCache, auditSvc)
+	auditSvc := service.NewAuditService(auditRepo)
+	tenantSvc := service.NewTenantService(tenantRepo, pool, auditSvc)
+	roleSvc := service.NewRoleService(roleRepo, permCache, auditSvc)
+	userSvc := service.NewUserService(userRepo, permCache, auditSvc)
+	permSvc := service.NewPermissionService(permRepo)
+	authSvc := service.NewAuthService(authRepo, userRepo, tenantRepo, roleRepo, jwtSvc, permCache, auditSvc)
 
 	// 4. Handlers
-	authH := auth.NewHandler(authSvc, userSvc, tenantRepo, roleSvc)
-	tenantH := tenant.NewHandler(tenantSvc)
-	userH := user.NewHandler(userSvc, roleSvc)
-	roleH := role.NewHandler(roleSvc)
-	permH := permission.NewHandler(permSvc)
-	auditH := audit.NewHandler(auditSvc)
+	authH := handler.NewAuthHandler(authSvc, userSvc, tenantRepo, roleSvc)
+	tenantH := handler.NewTenantHandler(tenantSvc)
+	userH := handler.NewUserHandler(userSvc, roleSvc)
+	roleH := handler.NewRoleHandler(roleSvc)
+	permH := handler.NewPermissionHandler(permSvc)
+	auditH := handler.NewAuditHandler(auditSvc)
 
 	engine := gin.New()
 

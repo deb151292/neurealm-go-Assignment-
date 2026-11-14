@@ -1,16 +1,14 @@
-package auth
+package service
 
 import (
 	"context"
 	"strings"
 	"time"
 
-	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -47,26 +45,26 @@ type MultiTenantLoginResult struct {
 	Tokens                  *AuthTokens     `json:"tokens,omitempty"`
 }
 
-type Service struct {
-	authRepo     Repository
-	userRepo     user.Repository
-	tenantRepo   tenant.Repository
-	roleRepo     role.Repository
-	jwtService   *JWTService
+type AuthService struct {
+	authRepo     repository.AuthRepository
+	userRepo     repository.UserRepository
+	tenantRepo   repository.TenantRepository
+	roleRepo     repository.RoleRepository
+	jwtService   *auth.JWTService
 	cache        *cache.PermissionCache
-	auditService *audit.Service
+	auditService *AuditService
 }
 
-func NewService(
-	authRepo Repository,
-	userRepo user.Repository,
-	tenantRepo tenant.Repository,
-	roleRepo role.Repository,
-	jwtService *JWTService,
+func NewAuthService(
+	authRepo repository.AuthRepository,
+	userRepo repository.UserRepository,
+	tenantRepo repository.TenantRepository,
+	roleRepo repository.RoleRepository,
+	jwtService *auth.JWTService,
 	cache *cache.PermissionCache,
-	auditService *audit.Service,
-) *Service {
-	return &Service{
+	auditService *AuditService,
+) *AuthService {
+	return &AuthService{
 		authRepo:     authRepo,
 		userRepo:     userRepo,
 		tenantRepo:   tenantRepo,
@@ -77,7 +75,7 @@ func NewService(
 	}
 }
 
-func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLoginResult, error) {
+func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*MultiTenantLoginResult, error) {
 	v := validator.New()
 	v.Email(req.Email, "email")
 	v.RequiredString(req.Password, "password")
@@ -91,12 +89,10 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLogi
 		return nil, domain.ErrUnauthorized
 	}
 
-	// Verify bcrypt password hash
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, domain.ErrUnauthorized
 	}
 
-	// Determine Tenant scope
 	var targetTenant *domain.Tenant
 	if req.TenantCode != "" {
 		code := strings.ToLower(strings.TrimSpace(req.TenantCode))
@@ -108,7 +104,6 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLogi
 			return nil, domain.ErrTenantSuspended
 		}
 
-		// Verify user membership in this tenant
 		tu, err := s.userRepo.GetTenantUserMembership(ctx, t.ID, u.ID)
 		if err != nil || tu.DeletedAt != nil {
 			return nil, domain.ErrUnauthorized
@@ -118,20 +113,17 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLogi
 		}
 		targetTenant = t
 	} else {
-		// Multi-tenant check: fetch all tenants for this user
 		tenants, err := s.userRepo.GetUserTenants(ctx, u.ID)
 		if err != nil || len(tenants) == 0 {
 			return nil, domain.ErrUnauthorized
 		}
 
 		if len(tenants) > 1 {
-			// User belongs to multiple tenants, return tenant selection prompt
 			return &MultiTenantLoginResult{
 				RequiresTenantSelection: true,
 				AvailableTenants:        tenants,
 			}, nil
 		}
-		// Exactly one active tenant
 		targetTenant = &tenants[0]
 	}
 
@@ -140,7 +132,6 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLogi
 		return nil, err
 	}
 
-	// Record audit event
 	if s.auditService != nil {
 		s.auditService.RecordAsync(&domain.AuditLog{
 			TenantID:   &targetTenant.ID,
@@ -161,7 +152,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*MultiTenantLogi
 	}, nil
 }
 
-func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*AuthTokens, error) {
+func (s *AuthService) Refresh(ctx context.Context, rawRefreshToken string) (*AuthTokens, error) {
 	if strings.TrimSpace(rawRefreshToken) == "" {
 		return nil, domain.ErrInvalidToken
 	}
@@ -172,16 +163,13 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*AuthTok
 		return nil, domain.ErrInvalidToken
 	}
 
-	// Token rotation: Revoke old refresh token immediately
 	_ = s.authRepo.RevokeRefreshToken(ctx, tokenHash)
 
-	// Fetch tenant and verify status
 	t, err := s.tenantRepo.GetByID(ctx, storedToken.TenantID)
 	if err != nil || t.Status == domain.TenantStatusSuspended {
 		return nil, domain.ErrTenantSuspended
 	}
 
-	// Fetch user in tenant
 	u, err := s.userRepo.GetByID(ctx, t.ID, storedToken.UserID)
 	if err != nil || u.DeletedAt != nil {
 		return nil, domain.ErrUnauthorized
@@ -212,7 +200,7 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*AuthTok
 	return tokens, nil
 }
 
-func (s *Service) SwitchTenant(ctx context.Context, userID uuid.UUID, newTenantCode string) (*AuthTokens, error) {
+func (s *AuthService) SwitchTenant(ctx context.Context, userID uuid.UUID, newTenantCode string) (*AuthTokens, error) {
 	code := strings.ToLower(strings.TrimSpace(newTenantCode))
 	t, err := s.tenantRepo.GetByCode(ctx, code)
 	if err != nil {
@@ -222,7 +210,6 @@ func (s *Service) SwitchTenant(ctx context.Context, userID uuid.UUID, newTenantC
 		return nil, domain.ErrTenantSuspended
 	}
 
-	// Verify membership in new tenant
 	tu, err := s.userRepo.GetTenantUserMembership(ctx, t.ID, userID)
 	if err != nil || tu.DeletedAt != nil {
 		return nil, domain.ErrUnauthorized
@@ -258,7 +245,7 @@ func (s *Service) SwitchTenant(ctx context.Context, userID uuid.UUID, newTenantC
 	return tokens, nil
 }
 
-func (s *Service) Logout(ctx context.Context, rawRefreshToken string) error {
+func (s *AuthService) Logout(ctx context.Context, rawRefreshToken string) error {
 	if rawRefreshToken != "" {
 		tokenHash := s.jwtService.HashRefreshToken(rawRefreshToken)
 		_ = s.authRepo.RevokeRefreshToken(ctx, tokenHash)
@@ -287,8 +274,7 @@ func (s *Service) Logout(ctx context.Context, rawRefreshToken string) error {
 	return nil
 }
 
-func (s *Service) issueTokens(ctx context.Context, u *domain.User, t *domain.Tenant) (*AuthTokens, error) {
-	// Fetch roles
+func (s *AuthService) issueTokens(ctx context.Context, u *domain.User, t *domain.Tenant) (*AuthTokens, error) {
 	rolesList, err := s.roleRepo.GetUserRoles(ctx, t.ID, u.ID)
 	if err != nil {
 		return nil, err
@@ -298,30 +284,25 @@ func (s *Service) issueTokens(ctx context.Context, u *domain.User, t *domain.Ten
 		roleNames = append(roleNames, r.Name)
 	}
 
-	// Fetch permissions
 	perms, err := s.roleRepo.GetUserPermissions(ctx, t.ID, u.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Cache permissions in fast memory
 	if s.cache != nil {
 		s.cache.Set(t.ID, u.ID, perms)
 	}
 
-	// Generate access token
 	accessToken, err := s.jwtService.GenerateAccessToken(u, t, roleNames, perms)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate refresh token
 	rawRefreshToken, tokenHash, err := s.jwtService.GenerateRefreshToken()
 	if err != nil {
 		return nil, err
 	}
 
-	// Store refresh token
 	rfModel := &domain.RefreshToken{
 		TokenHash: tokenHash,
 		UserID:    u.ID,
@@ -337,7 +318,7 @@ func (s *Service) issueTokens(ctx context.Context, u *domain.User, t *domain.Ten
 		AccessToken:  accessToken,
 		RefreshToken: rawRefreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.jwtService.accessExpiry.Seconds()),
+		ExpiresIn:    s.jwtService.AccessExpirySeconds(),
 		User:         u,
 		Tenant:       t,
 		Roles:        roleNames,

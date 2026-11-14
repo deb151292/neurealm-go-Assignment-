@@ -1,4 +1,4 @@
-package auth
+package repository
 
 import (
 	"context"
@@ -11,22 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type AuthRepository interface {
 	StoreRefreshToken(ctx context.Context, token *domain.RefreshToken) error
 	GetRefreshToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeAllUserTokens(ctx context.Context, tenantID, userID uuid.UUID) error
 }
 
-type pgxRepository struct {
+type pgxAuthRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewAuthRepository(pool *pgxpool.Pool) AuthRepository {
+	return &pgxAuthRepository{pool: pool}
 }
 
-func (r *pgxRepository) StoreRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
+func (r *pgxAuthRepository) StoreRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
 	query := `
 		INSERT INTO refresh_tokens (token_hash, user_id, tenant_id, revoked, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, NOW())
@@ -41,7 +41,7 @@ func (r *pgxRepository) StoreRefreshToken(ctx context.Context, token *domain.Ref
 	).Scan(&token.ID, &token.CreatedAt)
 }
 
-func (r *pgxRepository) GetRefreshToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error) {
+func (r *pgxAuthRepository) GetRefreshToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error) {
 	query := `
 		SELECT id, token_hash, user_id, tenant_id, revoked, expires_at, created_at
 		FROM refresh_tokens
@@ -66,13 +66,13 @@ func (r *pgxRepository) GetRefreshToken(ctx context.Context, tokenHash string) (
 	return &t, nil
 }
 
-func (r *pgxRepository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
+func (r *pgxAuthRepository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
 	query := `UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1`
 	_, err := r.pool.Exec(ctx, query, tokenHash)
 	return err
 }
 
-func (r *pgxRepository) RevokeAllUserTokens(ctx context.Context, tenantID, userID uuid.UUID) error {
+func (r *pgxAuthRepository) RevokeAllUserTokens(ctx context.Context, tenantID, userID uuid.UUID) error {
 	query := `UPDATE refresh_tokens SET revoked = TRUE WHERE tenant_id = $1 AND user_id = $2`
 	_, err := r.pool.Exec(ctx, query, tenantID, userID)
 	return err

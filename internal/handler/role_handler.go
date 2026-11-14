@@ -1,4 +1,4 @@
-package role
+package handler
 
 import (
 	"net/http"
@@ -6,26 +6,27 @@ import (
 
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-type Handler struct {
-	service *Service
+type RoleHandler struct {
+	service *service.RoleService
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewRoleHandler(service *service.RoleService) *RoleHandler {
+	return &RoleHandler{service: service}
 }
 
-func (h *Handler) CreateRole(c *gin.Context) {
+func (h *RoleHandler) CreateRole(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	var req CreateRoleRequest
+	var req service.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
@@ -40,7 +41,7 @@ func (h *Handler) CreateRole(c *gin.Context) {
 	response.Success(c, http.StatusCreated, "role created successfully", role)
 }
 
-func (h *Handler) GetRole(c *gin.Context) {
+func (h *RoleHandler) GetRole(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
@@ -62,7 +63,7 @@ func (h *Handler) GetRole(c *gin.Context) {
 	response.Success(c, http.StatusOK, "role retrieved successfully", role)
 }
 
-func (h *Handler) ListRoles(c *gin.Context) {
+func (h *RoleHandler) ListRoles(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
@@ -88,7 +89,7 @@ func (h *Handler) ListRoles(c *gin.Context) {
 	response.Paginated(c, params.Page, params.Limit, total, roles)
 }
 
-func (h *Handler) UpdateRole(c *gin.Context) {
+func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
@@ -101,7 +102,7 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	var req UpdateRoleRequest
+	var req service.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
@@ -116,7 +117,7 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 	response.Success(c, http.StatusOK, "role updated successfully", role)
 }
 
-func (h *Handler) DeleteRole(c *gin.Context) {
+func (h *RoleHandler) DeleteRole(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
@@ -137,7 +138,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	response.Success(c, http.StatusOK, "role deleted successfully", nil)
 }
 
-func (h *Handler) AssignPermissions(c *gin.Context) {
+func (h *RoleHandler) AssignPermissions(c *gin.Context) {
 	tenantID, ok := domain.GetTenantID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
@@ -150,7 +151,7 @@ func (h *Handler) AssignPermissions(c *gin.Context) {
 		return
 	}
 
-	var req AssignPermissionsRequest
+	var req service.AssignPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return

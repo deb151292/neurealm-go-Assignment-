@@ -1,25 +1,29 @@
-package auth
+package handler
 
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/repository"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
-	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service     *Service
-	userService *user.Service
-	tenantRepo  tenant.Repository
-	roleService *role.Service
+type AuthHandler struct {
+	service     *service.AuthService
+	userService *service.UserService
+	tenantRepo  repository.TenantRepository
+	roleService *service.RoleService
 }
 
-func NewHandler(service *Service, userService *user.Service, tenantRepo tenant.Repository, roleService *role.Service) *Handler {
-	return &Handler{
+func NewAuthHandler(
+	service *service.AuthService,
+	userService *service.UserService,
+	tenantRepo repository.TenantRepository,
+	roleService *service.RoleService,
+) *AuthHandler {
+	return &AuthHandler{
 		service:     service,
 		userService: userService,
 		tenantRepo:  tenantRepo,
@@ -27,8 +31,8 @@ func NewHandler(service *Service, userService *user.Service, tenantRepo tenant.R
 	}
 }
 
-func (h *Handler) Login(c *gin.Context) {
-	var req LoginRequest
+func (h *AuthHandler) Login(c *gin.Context) {
+	var req service.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
@@ -48,8 +52,8 @@ func (h *Handler) Login(c *gin.Context) {
 	response.Success(c, http.StatusOK, "login successful", result.Tokens)
 }
 
-func (h *Handler) Refresh(c *gin.Context) {
-	var req RefreshTokenRequest
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req service.RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
@@ -64,14 +68,14 @@ func (h *Handler) Refresh(c *gin.Context) {
 	response.Success(c, http.StatusOK, "token refreshed successfully", tokens)
 }
 
-func (h *Handler) SwitchTenant(c *gin.Context) {
+func (h *AuthHandler) SwitchTenant(c *gin.Context) {
 	userID, ok := domain.GetUserID(c.Request.Context())
 	if !ok {
 		response.FromError(c, domain.ErrUnauthorized)
 		return
 	}
 
-	var req SwitchTenantRequest
+	var req service.SwitchTenantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "INVALID_JSON", "malformed request payload", nil)
 		return
@@ -86,8 +90,8 @@ func (h *Handler) SwitchTenant(c *gin.Context) {
 	response.Success(c, http.StatusOK, "tenant switched successfully", tokens)
 }
 
-func (h *Handler) Logout(c *gin.Context) {
-	var req RefreshTokenRequest
+func (h *AuthHandler) Logout(c *gin.Context) {
+	var req service.RefreshTokenRequest
 	_ = c.ShouldBindJSON(&req)
 
 	if err := h.service.Logout(c.Request.Context(), req.RefreshToken); err != nil {
@@ -98,7 +102,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	response.Success(c, http.StatusOK, "logged out successfully", nil)
 }
 
-func (h *Handler) Me(c *gin.Context) {
+func (h *AuthHandler) Me(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, ok := domain.GetUserID(ctx)
 	tenantID, tok := domain.GetTenantID(ctx)

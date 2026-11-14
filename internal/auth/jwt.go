@@ -107,3 +107,7 @@ func (s *JWTService) ValidateAccessToken(tokenStr string) (*Claims, error) {
 func (s *JWTService) RefreshExpiry() time.Duration {
 	return s.refreshExpiry
 }
+
+func (s *JWTService) AccessExpirySeconds() int64 {
+	return int64(s.accessExpiry.Seconds())
+}

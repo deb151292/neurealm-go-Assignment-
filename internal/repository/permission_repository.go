@@ -1,4 +1,4 @@
-package permission
+package repository
 
 import (
 	"context"
@@ -8,19 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository interface {
+type PermissionRepository interface {
 	ListAll(ctx context.Context) ([]domain.Permission, error)
 }
 
-type pgxRepository struct {
+type pgxPermissionRepository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) Repository {
-	return &pgxRepository{pool: pool}
+func NewPermissionRepository(pool *pgxpool.Pool) PermissionRepository {
+	return &pgxPermissionRepository{pool: pool}
 }
 
-func (r *pgxRepository) ListAll(ctx context.Context) ([]domain.Permission, error) {
+func (r *pgxPermissionRepository) ListAll(ctx context.Context) ([]domain.Permission, error) {
 	query := `
 		SELECT id, resource, action, description, created_at
 		FROM permissions
