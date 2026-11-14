@@ -45,12 +45,6 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 		ctx = domain.WithPlatformAdmin(ctx, claims.IsPlatformAdmin)
 
 		c.Request = c.Request.WithContext(ctx)
-
-		c.Set("tenant_id", claims.TenantID)
-		c.Set("user_id", claims.UserID)
-		c.Set("user_email", claims.Email)
-		c.Set("is_platform_admin", claims.IsPlatformAdmin)
-
 		c.Next()
 	}
 }
