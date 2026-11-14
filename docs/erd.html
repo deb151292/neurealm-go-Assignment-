@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Database ER Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #0d1117;
+      color: #c9d1d9;
+    }
+    h1 {
+      color: #58a6ff;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: 12px;
+    }
+    .mermaid {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 24px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Database Entity-Relationship (ER) Diagram</h1>
+  <div class="mermaid">
+erDiagram
+    TENANTS ||--o{ TENANT_USERS : has_members
+    USERS ||--o{ TENANT_USERS : belongs_to
+    TENANTS ||--o{ ROLES : owns
+    ROLES ||--o{ ROLE_PERMISSIONS : contains
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : granted_by
+    TENANTS ||--o{ USER_ROLES : scopes
+    USERS ||--o{ USER_ROLES : assigned
+    ROLES ||--o{ USER_ROLES : assigned_to
+    TENANTS ||--o{ REFRESH_TOKENS : scopes_session
+    USERS ||--o{ REFRESH_TOKENS : holds
+    TENANTS ||--o{ AUDIT_LOGS : isolates
+    USERS ||--o{ AUDIT_LOGS : performed_by
+
+    TENANTS {
+        uuid id PK
+        string name
+        string code UK
+        string status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        string first_name
+        string last_name
+        boolean is_platform_admin
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    TENANT_USERS {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        string status
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
+
+    PERMISSIONS {
+        uuid id PK
+        string resource
+        string action
+        string description
+        timestamptz created_at
+    }
+
+    ROLES {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string description
+        boolean is_system
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ROLE_PERMISSIONS {
+        uuid role_id PK_FK
+        uuid permission_id PK_FK
+        timestamptz created_at
+    }
+
+    USER_ROLES {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        uuid role_id FK
+        timestamptz created_at
+    }
+
+    REFRESH_TOKENS {
+        uuid id PK
+        string token_hash UK
+        uuid user_id FK
+        uuid tenant_id FK
+        boolean revoked
+        timestamptz expires_at
+        timestamptz created_at
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid tenant_id FK
+        uuid actor_id FK
+        string actor_email
+        string action
+        string target_type
+        string target_id
+        string metadata
+        timestamptz created_at
+    }
+  </div>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+</body>
+</html>

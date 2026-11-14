@@ -68,8 +68,8 @@ erDiagram
     }
 
     ROLE_PERMISSIONS {
-        uuid role_id PK,FK
-        uuid permission_id PK,FK
+        uuid role_id PK_FK
+        uuid permission_id PK_FK
         timestamptz created_at
     }
 
