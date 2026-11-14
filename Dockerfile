@@ -29,6 +29,8 @@ RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /app/bin/api /app/api
 COPY --from=builder /app/bin/migrate /app/migrate
 COPY --from=builder /app/database/migrations /app/database/migrations
+
+# Copy .env file (optional - for local dev only, not for prod)
 COPY --from=builder /app/example.env /app/.env
 
 EXPOSE 8080
