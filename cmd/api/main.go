@@ -32,10 +32,10 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Auto-apply migrations
-	migrator := database.NewMigrator(db.Pool)
+	// 3. Auto-apply migrations using Goose
+	migrator := database.NewMigrator(db.Pool, "./database/migrations")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if err := migrator.AutoMigrate(ctx, "./migrations"); err != nil {
+	if err := migrator.Up(ctx); err != nil {
 		log.Printf("[API] Migration warning: %v", err)
 	}
 	cancel()

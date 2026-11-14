@@ -2,34 +2,108 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 )
 
 type Migrator struct {
-	pool *pgxpool.Pool
+	pool          *pgxpool.Pool
+	migrationsDir string
 }
 
-func NewMigrator(pool *pgxpool.Pool) *Migrator {
-	return &Migrator{pool: pool}
+func NewMigrator(pool *pgxpool.Pool, migrationsDir string) *Migrator {
+	if migrationsDir == "" {
+		migrationsDir = "./database/migrations"
+	}
+	return &Migrator{
+		pool:          pool,
+		migrationsDir: migrationsDir,
+	}
 }
 
-// RunMigrations executes a list of SQL migration files or raw SQL statements
-func (m *Migrator) RunMigrationFile(ctx context.Context, filePath string) error {
-	content, err := os.ReadFile(filePath)
+// openSQLDB opens a standard *sql.DB instance using pgx driver for Goose
+func (m *Migrator) openSQLDB() (*sql.DB, error) {
+	connConfig := m.pool.Config().ConnConfig
+	connStr := connConfig.ConnString()
+
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to read migration file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to open sql.DB with pgx: %w", err)
+	}
+	return db, nil
+}
+
+// Up runs all pending goose migrations from the migrations directory
+func (m *Migrator) Up(ctx context.Context) error {
+	db, err := m.openSQLDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
 	}
 
-	return m.ExecSQL(ctx, string(content))
+	log.Printf("[Goose] Running database migrations UP from: %s", m.migrationsDir)
+	if err := goose.UpContext(ctx, db, m.migrationsDir); err != nil {
+		return fmt.Errorf("goose up failed: %w", err)
+	}
+
+	log.Println("[Goose] Migrations applied successfully")
+	return nil
 }
 
+// Down rolls back the most recent goose migration
+func (m *Migrator) Down(ctx context.Context) error {
+	db, err := m.openSQLDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
+	}
+
+	log.Printf("[Goose] Rolling back database migration DOWN from: %s", m.migrationsDir)
+	if err := goose.DownContext(ctx, db, m.migrationsDir); err != nil {
+		return fmt.Errorf("goose down failed: %w", err)
+	}
+
+	log.Println("[Goose] Rollback completed successfully")
+	return nil
+}
+
+// Status prints the status of all migrations
+func (m *Migrator) Status(ctx context.Context) error {
+	db, err := m.openSQLDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
+	}
+
+	return goose.StatusContext(ctx, db, m.migrationsDir)
+}
+
+// AutoMigrate is an alias for Up to automatically migrate schema on startup
+func (m *Migrator) AutoMigrate(ctx context.Context, dir string) error {
+	if dir != "" {
+		m.migrationsDir = dir
+	}
+	return m.Up(ctx)
+}
+
+// ExecSQL executes raw SQL statements in a database transaction
 func (m *Migrator) ExecSQL(ctx context.Context, sqlScript string) error {
 	tx, err := m.pool.Begin(ctx)
 	if err != nil {
@@ -44,31 +118,5 @@ func (m *Migrator) ExecSQL(ctx context.Context, sqlScript string) error {
 		return fmt.Errorf("failed to execute migration sql: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit migration transaction: %w", err)
-	}
-
-	return nil
-}
-
-// AutoMigrate applies schema up migration
-func (m *Migrator) AutoMigrate(ctx context.Context, migrationsDir string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	upFile := filepath.Join(migrationsDir, "000001_init_schema.up.sql")
-	if _, err := os.Stat(upFile); err == nil {
-		log.Printf("[Migrator] Applying schema migration: %s", upFile)
-		if err := m.RunMigrationFile(ctx, upFile); err != nil {
-			// If already created, don't fail if table exists error, but report
-			if strings.Contains(err.Error(), "already exists") {
-				log.Printf("[Migrator] Schema already exists, skipping")
-				return nil
-			}
-			return err
-		}
-		log.Println("[Migrator] Successfully applied schema migrations")
-	}
-
-	return nil
+	return tx.Commit(ctx)
 }

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/gin-gonic/gin"
 )
 
 // RequirePermission verifies the user has the required resource:action permission

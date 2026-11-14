@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/gin-gonic/gin"
 )
 
 // EnforceTenantIsolation ensures that tenant context is strictly derived from the verified token

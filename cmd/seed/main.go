@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/deb151292/neurealm-go-Assignment-/internal/config"
@@ -22,17 +23,21 @@ func main() {
 	}
 	defer db.Close()
 
-	migrator := database.NewMigrator(db.Pool)
+	migrator := database.NewMigrator(db.Pool, "./database/migrations")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	log.Println("[Seed] Executing schema up migrations...")
-	if err := migrator.RunMigrationFile(ctx, "./migrations/000001_init_schema.up.sql"); err != nil {
-		log.Printf("[Seed] Note: %v (tables may already exist)", err)
+	log.Println("[Seed] Executing Goose schema up migrations...")
+	if err := migrator.Up(ctx); err != nil {
+		log.Printf("[Seed] Note: %v", err)
 	}
 
 	log.Println("[Seed] Executing seed data script...")
-	if err := migrator.RunMigrationFile(ctx, "./migrations/seed.sql"); err != nil {
+	seedSQL, err := os.ReadFile("./migrations/seed.sql")
+	if err != nil {
+		log.Fatalf("[Seed] Failed to read seed file: %v", err)
+	}
+	if err := migrator.ExecSQL(ctx, string(seedSQL)); err != nil {
 		log.Fatalf("[Seed] Failed to apply seed data: %v", err)
 	}
 

@@ -95,10 +95,24 @@ curl http://localhost:8080/health
    ```
 
 2. **Run Migrations & Seed Data**:
-   Ensure PostgreSQL is running and `DATABASE_URL` is configured in `.env`. Then execute:
-   ```bash
-   go run cmd/seed/main.go
-   ```
+   Ensure PostgreSQL is running and `DATABASE_URL` is configured in `.env`.
+   
+   - **Goose Migration CLI** (using Goose `up`, `down`, `status`):
+     ```bash
+     # Run all pending migrations
+     go run cmd/migrate/main.go up
+
+     # Check migration status
+     go run cmd/migrate/main.go status
+
+     # Rollback the last migration
+     go run cmd/migrate/main.go down
+     ```
+
+   - **Or Seed initial tenants and users**:
+     ```bash
+     go run cmd/seed/main.go
+     ```
 
 3. **Start the API Server**:
    ```bash
