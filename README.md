@@ -28,15 +28,15 @@ The codebase follows the Clean Architecture pattern (`Handler -> Service -> Repo
 .
 ├── cmd/
 │   ├── api/main.go               # REST API entrypoint & graceful shutdown
-│   └── seed/main.go              # Database seeder (tenants, roles, users)
-├── migrations/
-│   ├── 000001_init_schema.up.sql   # PostgreSQL normalized schema & composite indexes
-│   ├── 000001_init_schema.down.sql # Rollback migration
-│   └── seed.sql                  # Deterministic demo seed data
+│   └── migrate/main.go           # Goose migration CLI (up, down, status)
+├── database/
+│   └── migrations/               # Versioned SQL migrations with Goose annotations
+│       ├── 20261114000001_init_schema.sql  # Normalized PostgreSQL schema & composite indexes
+│       └── 20261114000002_seed_data.sql    # Deterministic demo seed data (Up/Down)
 ├── internal/
 │   ├── config/config.go          # Environment configuration loading (.env)
 │   ├── domain/                   # Entities, domain errors, and context keys
-│   ├── database/                 # pgxpool connection pool and migration runner
+│   ├── database/                 # pgxpool connection pool and Goose migration runner
 │   ├── cache/                    # Thread-safe in-memory permission cache with TTL
 │   ├── middleware/               # Auth, TenantIsolation, RBAC, RequestLogger, Recoverer
 │   ├── response/                 # Standard JSON response envelope & error mapper
@@ -55,6 +55,7 @@ The codebase follows the Clean Architecture pattern (`Handler -> Service -> Repo
 │   ├── DESIGN.md                 # 1-2 page Architecture & Design Document
 │   ├── ERD.md                    # Database ER diagram & Schema Dictionary
 │   ├── openapi.yaml              # Swagger / OpenAPI 3.0 specification
+│   ├── swagger.json              # Swagger JSON
 │   └── postman_collection.json   # Ready-to-import Postman Collection
 ├── Dockerfile                    # Multi-stage production container build
 ├── docker-compose.yml            # Local PostgreSQL 16 + API service
@@ -94,24 +95,19 @@ curl http://localhost:8080/health
    cp example.env .env
    ```
 
-2. **Run Migrations & Seed Data**:
+2. **Run Migrations & Seed Data via Goose**:
    Ensure PostgreSQL is running and `DATABASE_URL` is configured in `.env`.
    
-   - **Goose Migration CLI** (using Goose `up`, `down`, `status`):
+   - **Goose Migration CLI** (applies both schema and seed data):
      ```bash
-     # Run all pending migrations
+     # Run all pending migrations (schema + seed data)
      go run cmd/migrate/main.go up
 
      # Check migration status
      go run cmd/migrate/main.go status
 
-     # Rollback the last migration
+     # Rollback the last migration (e.g. seed data or schema)
      go run cmd/migrate/main.go down
-     ```
-
-   - **Or Seed initial tenants and users**:
-     ```bash
-     go run cmd/seed/main.go
      ```
 
 3. **Start the API Server**:
