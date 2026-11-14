@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: multitenant_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: multitenant_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multitenant_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: multitenant_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      ENV: production
+      API_BASE_PATH: /api/v1
+      DATABASE_URL: postgres://postgres:password123@postgres:5432/multitenant_db?sslmode=disable
+      DB_MAX_CONNS: 25
+      DB_MIN_CONNS: 5
+      DB_MAX_CONN_LIFETIME: 1h
+      DB_MAX_CONN_IDLE_TIME: 15m
+      DB_HEALTH_CHECK_PERIOD: 1m
+      JWT_SECRET: docker-compose-multitenant-secret-key-32-bytes!
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 168h
+      CACHE_TTL: 5m
+      CACHE_CLEANUP_INTERVAL: 10m
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
