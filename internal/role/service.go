@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/audit"
-	"github.com/neurealm/multi-tenant-system/internal/cache"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/validator"
 )
 
 type CreateRoleRequest struct {

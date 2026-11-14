@@ -5,21 +5,22 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/docs"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/config"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/permission"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/neurealm/multi-tenant-system/internal/audit"
-	"github.com/neurealm/multi-tenant-system/internal/auth"
-	"github.com/neurealm/multi-tenant-system/internal/cache"
-	"github.com/neurealm/multi-tenant-system/internal/config"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/middleware"
-	"github.com/neurealm/multi-tenant-system/internal/permission"
-	"github.com/neurealm/multi-tenant-system/internal/response"
-	"github.com/neurealm/multi-tenant-system/internal/role"
-	"github.com/neurealm/multi-tenant-system/internal/tenant"
-	"github.com/neurealm/multi-tenant-system/internal/user"
 )
 
 type Server struct {
@@ -117,6 +118,9 @@ func (s *Server) setupRoutes() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	// Mount Swagger UI & OpenAPI Specification routes
+	docs.RegisterSwaggerRoutes(r)
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

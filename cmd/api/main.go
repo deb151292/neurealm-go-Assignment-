@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/neurealm/multi-tenant-system/internal/config"
-	"github.com/neurealm/multi-tenant-system/internal/database"
-	"github.com/neurealm/multi-tenant-system/internal/server"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/config"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/database"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/server"
 )
 
 func main() {

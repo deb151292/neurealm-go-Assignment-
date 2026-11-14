@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/neurealm/multi-tenant-system/internal/auth"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
 
 func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {

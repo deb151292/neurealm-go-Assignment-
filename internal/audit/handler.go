@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
 
 type Handler struct {

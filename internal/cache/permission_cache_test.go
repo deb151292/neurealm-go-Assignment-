@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/cache"
 )
 
 func TestPermissionCache_SetAndGet(t *testing.T) {

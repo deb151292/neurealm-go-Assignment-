@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/neurealm/multi-tenant-system/internal/config"
 )
 
 type DB struct {

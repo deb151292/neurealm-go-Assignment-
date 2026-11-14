@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/response"
-	"github.com/neurealm/multi-tenant-system/internal/role"
 )
 
 type Handler struct {

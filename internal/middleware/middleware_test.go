@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/middleware"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/auth"
-	"github.com/neurealm/multi-tenant-system/internal/cache"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/middleware"
-	"github.com/neurealm/multi-tenant-system/internal/role"
 )
 
 func TestAuthMiddleware_MissingHeader(t *testing.T) {

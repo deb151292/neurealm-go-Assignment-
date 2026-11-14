@@ -232,7 +232,7 @@ components:
               example: FORBIDDEN
             message:
               type: string
-              example: forbidden: insufficient permissions
+              example: "forbidden: insufficient permissions"
             details:
               type: object
 

@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
 )
 
 type Service struct {

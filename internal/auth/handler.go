@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/response"
-	"github.com/neurealm/multi-tenant-system/internal/role"
-	"github.com/neurealm/multi-tenant-system/internal/tenant"
-	"github.com/neurealm/multi-tenant-system/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
 )
 
 type Handler struct {

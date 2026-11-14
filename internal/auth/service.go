@@ -5,14 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/audit"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/cache"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/role"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/tenant"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/user"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/audit"
-	"github.com/neurealm/multi-tenant-system/internal/cache"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/role"
-	"github.com/neurealm/multi-tenant-system/internal/tenant"
-	"github.com/neurealm/multi-tenant-system/internal/user"
-	"github.com/neurealm/multi-tenant-system/internal/validator"
 	"golang.org/x/crypto/bcrypt"
 )
 

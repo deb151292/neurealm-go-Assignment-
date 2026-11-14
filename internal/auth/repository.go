@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
 )
 
 type Repository interface {

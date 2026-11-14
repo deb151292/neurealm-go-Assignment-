@@ -3,7 +3,7 @@ package validator_test
 import (
 	"testing"
 
-	"github.com/neurealm/multi-tenant-system/internal/validator"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/validator"
 )
 
 func TestValidator_Email(t *testing.T) {
@@ -28,9 +28,9 @@ func TestValidator_TenantCode(t *testing.T) {
 		{"acme-corp", true},
 		{"globex", true},
 		{"org-123", true},
-		{"Abc", false},     // uppercase
-		{"a", false},       // too short
-		{"org_name", false}, // underscores not permitted in slug
+		{"Abc", false},       // uppercase
+		{"a", false},         // too short
+		{"org_name", false},  // underscores not permitted in slug
 		{"org--name", false}, // double hyphen
 		{"-org", false},
 	}

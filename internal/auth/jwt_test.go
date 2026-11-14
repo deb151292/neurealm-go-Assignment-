@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/auth"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/auth"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
 )
 
 func TestJWTService_GenerateAndValidateAccessToken(t *testing.T) {

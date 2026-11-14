@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/neurealm/multi-tenant-system/internal/domain"
-	"github.com/neurealm/multi-tenant-system/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
 
 // EnforceTenantIsolation ensures that tenant context is strictly derived from the verified token

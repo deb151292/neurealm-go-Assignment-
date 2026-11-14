@@ -6,22 +6,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
 )
 
 // MockStore provides an in-memory thread-safe implementation of all repository interfaces
 type MockStore struct {
-	mu           sync.RWMutex
-	Tenants      map[uuid.UUID]*domain.Tenant
-	Users        map[uuid.UUID]*domain.User
-	TenantUsers  map[string]*domain.TenantUser // key: "tenantID:userID"
-	Roles        map[uuid.UUID]*domain.Role
-	RolePerms    map[uuid.UUID][]uuid.UUID // roleID -> []permissionID
-	UserRoles    map[string][]uuid.UUID    // "tenantID:userID" -> []roleID
-	Permissions  map[uuid.UUID]*domain.Permission
+	mu            sync.RWMutex
+	Tenants       map[uuid.UUID]*domain.Tenant
+	Users         map[uuid.UUID]*domain.User
+	TenantUsers   map[string]*domain.TenantUser // key: "tenantID:userID"
+	Roles         map[uuid.UUID]*domain.Role
+	RolePerms     map[uuid.UUID][]uuid.UUID // roleID -> []permissionID
+	UserRoles     map[string][]uuid.UUID    // "tenantID:userID" -> []roleID
+	Permissions   map[uuid.UUID]*domain.Permission
 	RefreshTokens map[string]*domain.RefreshToken // key: tokenHash
-	AuditLogs    []domain.AuditLog
+	AuditLogs     []domain.AuditLog
 }
 
 func NewMockStore() *MockStore {
@@ -601,55 +601,122 @@ func (m *MockStore) ListAllPermissions(ctx context.Context) ([]domain.Permission
 	return list, nil
 }
 
-
 // Adapters to satisfy package interfaces cleanly:
 
 type tenantRepoAdapter struct{ store *MockStore }
-func (a *tenantRepoAdapter) Create(ctx context.Context, t *domain.Tenant) error { return a.store.Create(ctx, t) }
-func (a *tenantRepoAdapter) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) { return a.store.GetByID(ctx, id) }
-func (a *tenantRepoAdapter) GetByCode(ctx context.Context, code string) (*domain.Tenant, error) { return a.store.GetByCode(ctx, code) }
-func (a *tenantRepoAdapter) Update(ctx context.Context, t *domain.Tenant) error { return a.store.Update(ctx, t) }
-func (a *tenantRepoAdapter) List(ctx context.Context, p domain.PaginationParams) ([]domain.Tenant, int64, error) { return a.store.List(ctx, p) }
+
+func (a *tenantRepoAdapter) Create(ctx context.Context, t *domain.Tenant) error {
+	return a.store.Create(ctx, t)
+}
+func (a *tenantRepoAdapter) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+	return a.store.GetByID(ctx, id)
+}
+func (a *tenantRepoAdapter) GetByCode(ctx context.Context, code string) (*domain.Tenant, error) {
+	return a.store.GetByCode(ctx, code)
+}
+func (a *tenantRepoAdapter) Update(ctx context.Context, t *domain.Tenant) error {
+	return a.store.Update(ctx, t)
+}
+func (a *tenantRepoAdapter) List(ctx context.Context, p domain.PaginationParams) ([]domain.Tenant, int64, error) {
+	return a.store.List(ctx, p)
+}
 
 type userRepoAdapter struct{ store *MockStore }
-func (a *userRepoAdapter) CreateUserInTenant(ctx context.Context, tid uuid.UUID, u *domain.User, r []uuid.UUID) error { return a.store.CreateUserInTenant(ctx, tid, u, r) }
-func (a *userRepoAdapter) GetByID(ctx context.Context, tid, uid uuid.UUID) (*domain.User, error) { return a.store.GetUserByID(ctx, tid, uid) }
-func (a *userRepoAdapter) GetByEmail(ctx context.Context, email string) (*domain.User, error) { return a.store.GetByEmail(ctx, email) }
-func (a *userRepoAdapter) Update(ctx context.Context, tid, uid uuid.UUID, f, l, s string) (*domain.User, error) { return a.store.UpdateUser(ctx, tid, uid, f, l, s) }
-func (a *userRepoAdapter) SoftDelete(ctx context.Context, tid, uid uuid.UUID) error { return a.store.SoftDelete(ctx, tid, uid) }
-func (a *userRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.User, int64, error) { return a.store.ListByTenant(ctx, tid, p) }
-func (a *userRepoAdapter) GetUserRolesInTenant(ctx context.Context, tid, uid uuid.UUID) ([]domain.Role, error) { return a.store.GetUserRolesInTenant(ctx, tid, uid) }
-func (a *userRepoAdapter) GetUserTenants(ctx context.Context, uid uuid.UUID) ([]domain.Tenant, error) { return a.store.GetUserTenants(ctx, uid) }
-func (a *userRepoAdapter) GetTenantUserMembership(ctx context.Context, tid, uid uuid.UUID) (*domain.TenantUser, error) { return a.store.GetTenantUserMembership(ctx, tid, uid) }
+
+func (a *userRepoAdapter) CreateUserInTenant(ctx context.Context, tid uuid.UUID, u *domain.User, r []uuid.UUID) error {
+	return a.store.CreateUserInTenant(ctx, tid, u, r)
+}
+func (a *userRepoAdapter) GetByID(ctx context.Context, tid, uid uuid.UUID) (*domain.User, error) {
+	return a.store.GetUserByID(ctx, tid, uid)
+}
+func (a *userRepoAdapter) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+	return a.store.GetByEmail(ctx, email)
+}
+func (a *userRepoAdapter) Update(ctx context.Context, tid, uid uuid.UUID, f, l, s string) (*domain.User, error) {
+	return a.store.UpdateUser(ctx, tid, uid, f, l, s)
+}
+func (a *userRepoAdapter) SoftDelete(ctx context.Context, tid, uid uuid.UUID) error {
+	return a.store.SoftDelete(ctx, tid, uid)
+}
+func (a *userRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.User, int64, error) {
+	return a.store.ListByTenant(ctx, tid, p)
+}
+func (a *userRepoAdapter) GetUserRolesInTenant(ctx context.Context, tid, uid uuid.UUID) ([]domain.Role, error) {
+	return a.store.GetUserRolesInTenant(ctx, tid, uid)
+}
+func (a *userRepoAdapter) GetUserTenants(ctx context.Context, uid uuid.UUID) ([]domain.Tenant, error) {
+	return a.store.GetUserTenants(ctx, uid)
+}
+func (a *userRepoAdapter) GetTenantUserMembership(ctx context.Context, tid, uid uuid.UUID) (*domain.TenantUser, error) {
+	return a.store.GetTenantUserMembership(ctx, tid, uid)
+}
 
 type roleRepoAdapter struct{ store *MockStore }
-func (a *roleRepoAdapter) Create(ctx context.Context, r *domain.Role) error { return a.store.CreateRole(ctx, r) }
-func (a *roleRepoAdapter) GetByID(ctx context.Context, tid, rid uuid.UUID) (*domain.Role, error) { return a.store.GetRoleByID(ctx, tid, rid) }
-func (a *roleRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.Role, int64, error) { return a.store.ListRolesByTenant(ctx, tid, p) }
-func (a *roleRepoAdapter) Update(ctx context.Context, tid, rid uuid.UUID, n, d string) (*domain.Role, error) { return a.store.UpdateRole(ctx, tid, rid, n, d) }
-func (a *roleRepoAdapter) Delete(ctx context.Context, tid, rid uuid.UUID) error { return a.store.DeleteRole(ctx, tid, rid) }
-func (a *roleRepoAdapter) AssignPermissions(ctx context.Context, tid, rid uuid.UUID, p []uuid.UUID) error { return a.store.AssignPermissions(ctx, tid, rid, p) }
-func (a *roleRepoAdapter) GetRolePermissions(ctx context.Context, rid uuid.UUID) ([]domain.Permission, error) { return a.store.GetRolePermissions(ctx, rid) }
-func (a *roleRepoAdapter) AssignUserRoles(ctx context.Context, tid, uid uuid.UUID, r []uuid.UUID) error { return a.store.AssignUserRoles(ctx, tid, uid, r) }
-func (a *roleRepoAdapter) GetUserRoles(ctx context.Context, tid, uid uuid.UUID) ([]domain.Role, error) { return a.store.GetUserRolesInTenant(ctx, tid, uid) }
-func (a *roleRepoAdapter) GetUserPermissions(ctx context.Context, tid, uid uuid.UUID) ([]string, error) { return a.store.GetUserPermissions(ctx, tid, uid) }
+
+func (a *roleRepoAdapter) Create(ctx context.Context, r *domain.Role) error {
+	return a.store.CreateRole(ctx, r)
+}
+func (a *roleRepoAdapter) GetByID(ctx context.Context, tid, rid uuid.UUID) (*domain.Role, error) {
+	return a.store.GetRoleByID(ctx, tid, rid)
+}
+func (a *roleRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.Role, int64, error) {
+	return a.store.ListRolesByTenant(ctx, tid, p)
+}
+func (a *roleRepoAdapter) Update(ctx context.Context, tid, rid uuid.UUID, n, d string) (*domain.Role, error) {
+	return a.store.UpdateRole(ctx, tid, rid, n, d)
+}
+func (a *roleRepoAdapter) Delete(ctx context.Context, tid, rid uuid.UUID) error {
+	return a.store.DeleteRole(ctx, tid, rid)
+}
+func (a *roleRepoAdapter) AssignPermissions(ctx context.Context, tid, rid uuid.UUID, p []uuid.UUID) error {
+	return a.store.AssignPermissions(ctx, tid, rid, p)
+}
+func (a *roleRepoAdapter) GetRolePermissions(ctx context.Context, rid uuid.UUID) ([]domain.Permission, error) {
+	return a.store.GetRolePermissions(ctx, rid)
+}
+func (a *roleRepoAdapter) AssignUserRoles(ctx context.Context, tid, uid uuid.UUID, r []uuid.UUID) error {
+	return a.store.AssignUserRoles(ctx, tid, uid, r)
+}
+func (a *roleRepoAdapter) GetUserRoles(ctx context.Context, tid, uid uuid.UUID) ([]domain.Role, error) {
+	return a.store.GetUserRolesInTenant(ctx, tid, uid)
+}
+func (a *roleRepoAdapter) GetUserPermissions(ctx context.Context, tid, uid uuid.UUID) ([]string, error) {
+	return a.store.GetUserPermissions(ctx, tid, uid)
+}
 
 type authRepoAdapter struct{ store *MockStore }
-func (a *authRepoAdapter) StoreRefreshToken(ctx context.Context, t *domain.RefreshToken) error { return a.store.StoreRefreshToken(ctx, t) }
-func (a *authRepoAdapter) GetRefreshToken(ctx context.Context, th string) (*domain.RefreshToken, error) { return a.store.GetRefreshToken(ctx, th) }
-func (a *authRepoAdapter) RevokeRefreshToken(ctx context.Context, th string) error { return a.store.RevokeRefreshToken(ctx, th) }
-func (a *authRepoAdapter) RevokeAllUserTokens(ctx context.Context, tid, uid uuid.UUID) error { return a.store.RevokeAllUserTokens(ctx, tid, uid) }
+
+func (a *authRepoAdapter) StoreRefreshToken(ctx context.Context, t *domain.RefreshToken) error {
+	return a.store.StoreRefreshToken(ctx, t)
+}
+func (a *authRepoAdapter) GetRefreshToken(ctx context.Context, th string) (*domain.RefreshToken, error) {
+	return a.store.GetRefreshToken(ctx, th)
+}
+func (a *authRepoAdapter) RevokeRefreshToken(ctx context.Context, th string) error {
+	return a.store.RevokeRefreshToken(ctx, th)
+}
+func (a *authRepoAdapter) RevokeAllUserTokens(ctx context.Context, tid, uid uuid.UUID) error {
+	return a.store.RevokeAllUserTokens(ctx, tid, uid)
+}
 
 type auditRepoAdapter struct{ store *MockStore }
-func (a *auditRepoAdapter) Create(ctx context.Context, l *domain.AuditLog) error { return a.store.CreateAudit(ctx, l) }
-func (a *auditRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.AuditLog, int64, error) { return a.store.ListAuditByTenant(ctx, tid, p) }
+
+func (a *auditRepoAdapter) Create(ctx context.Context, l *domain.AuditLog) error {
+	return a.store.CreateAudit(ctx, l)
+}
+func (a *auditRepoAdapter) ListByTenant(ctx context.Context, tid uuid.UUID, p domain.PaginationParams) ([]domain.AuditLog, int64, error) {
+	return a.store.ListAuditByTenant(ctx, tid, p)
+}
 
 type permRepoAdapter struct{ store *MockStore }
-func (a *permRepoAdapter) ListAll(ctx context.Context) ([]domain.Permission, error) { return a.store.ListAllPermissions(ctx) }
+
+func (a *permRepoAdapter) ListAll(ctx context.Context) ([]domain.Permission, error) {
+	return a.store.ListAllPermissions(ctx)
+}
 
 func (m *MockStore) TenantRepo() *tenantRepoAdapter { return &tenantRepoAdapter{store: m} }
-func (m *MockStore) UserRepo() *userRepoAdapter { return &userRepoAdapter{store: m} }
-func (m *MockStore) RoleRepo() *roleRepoAdapter { return &roleRepoAdapter{store: m} }
-func (m *MockStore) AuthRepo() *authRepoAdapter { return &authRepoAdapter{store: m} }
-func (m *MockStore) AuditRepo() *auditRepoAdapter { return &auditRepoAdapter{store: m} }
-func (m *MockStore) PermRepo() *permRepoAdapter { return &permRepoAdapter{store: m} }
+func (m *MockStore) UserRepo() *userRepoAdapter     { return &userRepoAdapter{store: m} }
+func (m *MockStore) RoleRepo() *roleRepoAdapter     { return &roleRepoAdapter{store: m} }
+func (m *MockStore) AuthRepo() *authRepoAdapter     { return &authRepoAdapter{store: m} }
+func (m *MockStore) AuditRepo() *auditRepoAdapter   { return &auditRepoAdapter{store: m} }
+func (m *MockStore) PermRepo() *permRepoAdapter     { return &permRepoAdapter{store: m} }

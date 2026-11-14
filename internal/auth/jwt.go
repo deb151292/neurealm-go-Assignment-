@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/neurealm/multi-tenant-system/internal/domain"
 )
 
 type Claims struct {

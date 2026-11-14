@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/neurealm/multi-tenant-system/internal/response"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/response"
 )
 
 // Recoverer catches unhandled panics and returns a clean JSON 500 response

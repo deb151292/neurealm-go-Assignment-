@@ -107,6 +107,18 @@ curl http://localhost:8080/health
 
 ---
 
+## 📖 Interactive Swagger UI Documentation
+
+Once the server is running, access the interactive Swagger UI directly in your browser:
+
+- **Swagger UI**: [http://localhost:8080/swagger](http://localhost:8080/swagger) (or `/docs`)
+- **OpenAPI 3.0 Spec (YAML)**: [http://localhost:8080/swagger/openapi.yaml](http://localhost:8080/swagger/openapi.yaml)
+- **OpenAPI 3.0 Spec (JSON)**: [http://localhost:8080/swagger/doc.json](http://localhost:8080/swagger/doc.json)
+
+> **Tip**: Click the **Authorize** button in Swagger UI to paste a JWT token obtained from `/api/v1/auth/login`. Authorization persists across requests so you can test all protected endpoints directly in the browser!
+
+---
+
 ## 🧪 Running Tests
 
 The test suite includes comprehensive unit tests and end-to-end integration tests that explicitly verify **cross-tenant isolation** and **authorization edge cases**:

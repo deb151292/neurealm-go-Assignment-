@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/neurealm/multi-tenant-system/internal/domain"
+	"github.com/deb151292/neurealm-go-Assignment-/internal/domain"
 )
 
 var codeRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
